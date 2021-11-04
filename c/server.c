@@ -7,12 +7,6 @@
 #define BUFFER 1024  //Max length of buffer
 #define PORT 8888   //The port on which to listen for incoming data
 
-void die(char *s)
-{
-    perror(s);
-    exit(1);
-}
-
 int main(void)
 {
     struct sockaddr_in si_me, si_other;
@@ -22,7 +16,8 @@ int main(void)
 
     //create a UDP socket
     if ((s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-        die("socket");
+        perror("socket");
+        exit(1);
     }
 
     // zero out the structure
@@ -32,19 +27,21 @@ int main(void)
     si_me.sin_port = htons(PORT);
     si_me.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    //bind socket to port
-    if( bind(s , (struct sockaddr*)&si_me, sizeof(si_me) ) == -1) {
-        die("bind");
+    // bind socket to port
+    if(bind(s, (struct sockaddr*)&si_me, sizeof(si_me)) == -1) {
+        perror("bind");
+        exit(1);
     }
 
-    //keep listening for data
+    // keep listening for data
     while(1) {
         printf("Waiting for data...");
         fflush(stdout);
 
-        //try to receive some data, this is a blocking call
+        // try to receive some data, this is a blocking call
         if ((recv_len = recvfrom(s, buf, BUFFER, 0, (struct sockaddr *) &si_other, &slen)) == -1) {
-            die("recvfrom()");
+            perror("recvfrom()");
+            exit(1);
         }
 
         //print details of the client/peer and the data received
