@@ -27,7 +27,7 @@ int main() {
 
 void prepare_client() {
     // Creating socket file descriptor
-    if ((socket_file_descriptor = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+    if ((socket_file_descriptor = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);
     }
