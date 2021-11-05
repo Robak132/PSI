@@ -7,7 +7,7 @@
 
 #define PORT 8888
 
-struct sockaddr_in server_address;
+struct sockaddr_in6 server_address;
 int socket_file_descriptor;
 
 void send_message(char *message);
@@ -35,9 +35,9 @@ void prepare_client() {
     memset(&server_address, 0, sizeof(server_address));
 
     // Configuring server
-    server_address.sin_family = AF_INET6;
-    server_address.sin_port = htons(PORT);
-    server_address.sin_addr.s_addr = inet_addr("::1");
+    server_address.sin6_family = AF_INET6;
+    server_address.sin6_port = htons(PORT);
+    server_address.sin6_addr = in6addr_loopback;
 }
 
 
