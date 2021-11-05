@@ -35,7 +35,7 @@ int main(void)
 
     // keep listening for data
     while(1) {
-        printf("Waiting for data...");
+        printf("Waiting for data... ");
         fflush(stdout);
 
         // try to receive some data, this is a blocking call
