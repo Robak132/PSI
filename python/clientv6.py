@@ -1,4 +1,5 @@
 import socket
+import threading
 
 
 def send_messages():
@@ -18,9 +19,9 @@ def main():
 
 
 if __name__ == '__main__':
-    SERVER_ADDRESS = "127.0.0.1"
+    SERVER_ADDRESS = "::1"
     SERVER_PORT = 8888
 
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    client_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
     client_socket.settimeout(1.0)
     main()
