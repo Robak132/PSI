@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 
 #define BUFFER 1024  //Max length of buffer
-#define PORT 8888   //The port on which to listen for incoming data
+#define PORT 8884   //The port on which to listen for incoming data
 
 int main(void)
 {
@@ -32,6 +32,8 @@ int main(void)
         perror("bind");
         exit(1);
     }
+
+    printf("sock_v4_fd: %d\n", s);
 
     // keep listening for data
     while(1) {
