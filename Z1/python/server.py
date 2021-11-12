@@ -22,6 +22,7 @@ def create_new_thread_v4():
 
 def create_new_thread_v6():
     server_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+    server_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
     server_socket.bind(('', PORT))
     print("Server IPv6 is waiting for data...")
     while True:

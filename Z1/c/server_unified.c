@@ -11,8 +11,8 @@
 #include <unistd.h>
 
 #define BUFFER 1024  //Max length of buffer
-#define PORT_V6 8886   //The port on which to listen for incoming data for IPv6
-#define PORT_V4 8884   //The port on which to listen for incoming data for IPv4
+#define PORT_V6 8888   //The port on which to listen for incoming data for IPv6
+#define PORT_V4 8888   //The port on which to listen for incoming data for IPv4
 
 int main(void)
 {
@@ -61,6 +61,9 @@ int main(void)
     server_addr_v6.sin6_family = AF_INET6;
     server_addr_v6.sin6_addr = in6addr_any;
     server_addr_v6.sin6_port = htons( PORT_V6 );
+
+    int v6_only = 1; // whatever, ważne żeby > 0
+    setsockopt(sock_v6_fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6_only, sizeof(int));
 
     if (bind( sock_v6_fd, (struct sockaddr *)&server_addr_v6, sizeof( server_addr_v6 )) < 0)
     {
