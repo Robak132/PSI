@@ -2,12 +2,10 @@ import socket
 import threading
 
 
-def wrap_address(address):
-    return f"Received packet from {address[0]}:{address[1]}"
-
-
-def wrap_message(message):
-    return f"Data: {message.decode('utf-8')}"
+def print_message(address, message):
+    print(f"Received packet from {address[0]}:{address[1]}")
+    print(f"Data: {message.decode('utf-8')}")
+    print(f"Data size: {len(message)}")
 
 
 def create_new_thread_v4():
@@ -16,8 +14,7 @@ def create_new_thread_v4():
     print("Server IPv4 is waiting for data...")
     while True:
         message, address = server_socket.recvfrom(BUFFER_SIZE)
-        print(wrap_address(address))
-        print(wrap_message(message))
+        print_message(address, message)
 
 
 def create_new_thread_v6():
@@ -27,13 +24,12 @@ def create_new_thread_v6():
     print("Server IPv6 is waiting for data...")
     while True:
         message, address = server_socket.recvfrom(BUFFER_SIZE)
-        print(wrap_address(address))
-        print(wrap_message(message))
+        print_message(address, message)
 
 
 if __name__ == '__main__':
     PORT = 8888
-    BUFFER_SIZE = 1024
+    BUFFER_SIZE = 102400  # >65507
 
     threading.Thread(target=create_new_thread_v4).start()
     threading.Thread(target=create_new_thread_v6).start()

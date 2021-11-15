@@ -1,5 +1,4 @@
 import socket
-import threading
 
 
 def send_messages():
@@ -7,12 +6,31 @@ def send_messages():
     if client_socket is None:
         raise ConnectionError('No client socket set.')
 
-    for i in range(5):
-        message = bytes(f"Message no. {i}", encoding="utf8")
+    size = 1
+    loop_running = True
+    while loop_running:
+        message = bytes(f"{size}", encoding="utf8")
+        message = message + b"\0" * (size - len(message))
         server = (SERVER_ADDRESS, SERVER_PORT)
 
-        client_socket.sendto(message, server)
+        try:
+            client_socket.sendto(message, server)
+            print(f"Successfully sent datagram of size {size}")
+            size = size * 2
+        except Exception as e:
+            print(f"Failed to sent datagram of size {size}: {e}")
+            loop_running = False
 
+    size = 65507
+    message = bytes(f"{size}", encoding="utf8")
+    message = message + b"\0" * (size - len(message))
+    server = (SERVER_ADDRESS, SERVER_PORT)
+
+    try:
+        client_socket.sendto(message, server)
+        print(f"Successfully sent datagram of size {size}")
+    except Exception as e:
+        print(f"Failed to sent datagram of size {size}: {e}")
 
 def main():
     send_messages()
