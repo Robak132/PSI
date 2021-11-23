@@ -25,9 +25,9 @@ class Client:
 
 class ClientV6(Client):
     def __init__(self):
+        super().__init__()
         self.server = ("::1", 8888)
         self.client_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        super().__init__()
 
 
 def test_different_message_sizes(cls):
