@@ -1,69 +1,54 @@
 import socket
 
-CONFIGURATION = {
-    "ipv4": {
-        "ip": "127.0.0.1",
-        "port": 8888,
-        "socket_inet": socket.AF_INET,
-        "socket_dgram": socket.SOCK_DGRAM
-    },
-    "ipv6": {
-        "ip": "::1",
-        "port": 8888,
-        "socket_inet": socket.AF_INET6,
-        "socket_dgram": socket.SOCK_DGRAM
-    }
-}
-client_socket = None
+
+class Client:
+    def __init__(self):
+        self.server = ("127.0.0.1", 8888)
+        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def send_message(self, message: bytes):
+        size = len(message)
+        try:
+            self.client_socket.sendto(message, self.server)
+            print(f"Successfully sent datagram of size {size}")
+            return True
+        except Exception as e:
+            print(f"Failed to send datagram of size {size}: {e}")
+            return False
+
+    @staticmethod
+    def create_message(size: int):
+        message = bytes(f"{size}", encoding="utf8")
+        message = message + b"\0" * (size - len(message))
+        return message
 
 
-def send_message(message: bytes, server: tuple):
-    size = len(message)
-    try:
-        client_socket.sendto(message, server)
-        print(f"Successfully sent datagram of size {size}")
-        return True
-    except Exception as e:
-        print(f"Failed to sent datagram of size {size}: {e}")
-        return False
+class ClientV6(Client):
+    def __init__(self):
+        self.server = ("::1", 8888)
+        self.client_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        super().__init__()
 
 
-def create_message(size: int):
-    message = bytes(f"{size}", encoding="utf8")
-    message = message + b"\0" * (size - len(message))
-    return message
-
-
-def prepare_connection(use_ipv6=False):
-    chosen_standard = "ipv6" if use_ipv6 else "ipv4"
-    global client_socket
-
-    client_socket = socket.socket(CONFIGURATION[chosen_standard]["socket_inet"],
-                                  CONFIGURATION[chosen_standard]["socket_dgram"])
-    client_socket.settimeout(1.0)
-
-    server = (CONFIGURATION[chosen_standard]["ip"], CONFIGURATION[chosen_standard]["port"])
-    return server
-
-
-def test_different_message_sizes(use_ipv6=False):
-    server = prepare_connection(use_ipv6)
+def test_different_message_sizes(cls):
     size = 1
     loop_is_running = True
 
+    client = cls()
+
     while loop_is_running:
-        message = create_message(size=size)
-        loop_is_running = send_message(message, server)
+        message = client.create_message(size=size)
+        loop_is_running = client.send_message(message)
         if loop_is_running:
             size *= 2
 
-    message = create_message(size=65507)
-    send_message(message, server)
+    message = client.create_message(size=65507)
+    client.send_message(message)
 
 
 def main():
-    test_different_message_sizes()
-    test_different_message_sizes(use_ipv6=True)
+    test_different_message_sizes(Client)
+    test_different_message_sizes(ClientV6)
 
 
 if __name__ == '__main__':
