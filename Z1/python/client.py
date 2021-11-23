@@ -13,7 +13,7 @@ class Client:
             self.client_socket.sendto(message, self.server)
             print(f"Successfully sent datagram of size {size}")
             return True
-        except Exception as e:
+        except OSError:
             print(f"Failed to send datagram of size {size}")
             return False
 
@@ -50,30 +50,30 @@ def test_different_message_sizes(cls):
             return size
 
 
-def find_max_message_size(cls, minlen: int, maxlen: int):
+def find_max_message_size(cls, min_len: int, max_len: int):
     client = cls()
 
     print(f"\n{f' Looking for maximum message size for {client.protocol} ':*^80}\n")
 
-    while maxlen - minlen > 1:
-        testlen: int = int((minlen + maxlen) / 2)
-        message = client.create_message(size=testlen)
+    while max_len - min_len > 1:
+        test_len: int = int((min_len + max_len) / 2)
+        message = client.create_message(size=test_len)
         if client.send_message(message):
-            minlen = testlen
+            min_len = test_len
         else:
-            maxlen = testlen
+            max_len = test_len
 
-    print(f"\nMaximum size of a message to send with {client.protocol} equals {minlen}\n")
+    print(f"\nMaximum size of a message to send with {client.protocol} equals {min_len}\n")
 
 
 def main():
     print(f"\n{' Client v4 ':#^80}\n")
     size = test_different_message_sizes(Client)
-    find_max_message_size(Client, size/2, size)
+    find_max_message_size(Client, size//2, size)
 
     print(f"\n{' Client v6 ':#^80}\n")
     size = test_different_message_sizes(ClientV6)
-    find_max_message_size(ClientV6, size/2, size)
+    find_max_message_size(ClientV6, size//2, size)
 
 
 if __name__ == '__main__':
