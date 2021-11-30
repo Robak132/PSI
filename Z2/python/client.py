@@ -18,6 +18,7 @@ class Client:
         try:
             self.client_socket.send(message)
             response = self.client_socket.recv(BUFFER_SIZE)
+            print(response.decode('utf-8'))
         except OSError:
             pass
 
@@ -45,11 +46,13 @@ class ClientV6(Client):
 
 
 def main():
-    clientv6 = ClientV6()
-    clientv6.send_message(b"XDv6")
-
     client = Client()
     client.send_message(b"XDv4")
+    client.close()
+
+    clientv6 = ClientV6()
+    clientv6.send_message(b"XDv6")
+    clientv6.close()
 
 
 if __name__ == '__main__':
