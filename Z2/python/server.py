@@ -1,61 +1,50 @@
-import socket
 import threading
+import socket
 
 
 class Server:
-    def __init__(self):
-        self.protocol = "IPv4"
-        self.server_properties = None
-        self.server_socket = None
-        self.prepare()
+    def __init__(self, address, port, protocol_name="IPv4"):
+        self.protocol = protocol_name
+        self.server_socket = self.setup_sockets(address, port)
+        self.server_socket.listen(1)
+        print(f"{self.protocol}: Opened socket connection: {self.server_socket}")
 
-    def prepare(self):
-        self.server_properties = ("127.0.0.1", 8888)
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_socket.bind(self.server_properties)
-        self.server_socket.listen(5)
+    def setup_sockets(self, address, port):
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind((address, port))
+        return server_socket
 
-    def listen(self):
+    def run(self):
         while True:
-            connection, address = self.server_socket.accept()
-            with connection:
-                print(f"Connection from: {address}", end='\t', flush=True)
-                while True:
-                    message = connection.recv(BUFFER_SIZE)
-                    if not message:
-                        break
-                    self.print_message(address, message)
-                    connection.sendall(message)
-            print("Connection closed by client.", flush=True)
+            conn, addr = self.server_socket.accept()
+            with conn:
+                print(f'{self.protocol}: Connected by {addr}')
+                data = conn.recv(1024)
+                self.print_message(addr, data)
+                conn.send(data)
+                conn.close()
+            print(f'{self.protocol}: Connection with {addr} ended')
 
-    @staticmethod
-    def print_message(address, message):
-        print(f"Received packet from {address[0]}:{address[1]}", flush=True)
-        print(f"Data: {message.decode('utf-8')}", flush=True)
-        print(f"Data size: {len(message)}", flush=True)
+    def print_message(self, address, message):
+        print(f"{self.protocol}: Received message: {message.decode('utf-8')} [{len(message)}] from {address[0]}:{address[1]}")
 
 
 class ServerV6(Server):
-    def __init__(self):
-        super().__init__()
-        self.protocol = "IPv6"
+    def __init__(self, address, port):
+        super().__init__(address, port, protocol_name="IPv6")
 
-    def prepare(self):
-        self.server_properties = ("::1", 8889)
-        self.server_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        self.server_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_socket.bind(self.server_properties)
-        self.server_socket.listen(5)
+    def setup_sockets(self, address, port):
+        server_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        server_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind((address, port, 0, 0))
+        return server_socket
 
 
 if __name__ == '__main__':
-    PORT = 8888
-    BUFFER_SIZE = 102400  # >65507
-
-    server_v4 = Server()
-    server_v6 = ServerV6()
-
-    threading.Thread(target=server_v4.listen()).start()
-    threading.Thread(target=server_v6.listen()).start()
+    try:
+        threading.Thread(target=Server("127.0.0.1", 8888).run).start()
+        threading.Thread(target=ServerV6("::1", 8888).run).start()
+    except Exception as e:
+        print(f"Error occurred: {e}")

@@ -4,23 +4,27 @@ import socket
 class Client:
     def __init__(self):
         self.protocol = "IPv4"
-        self.server = None
+        self.socket_address = None
         self.client_socket = None
         self.prepare()
 
     def prepare(self):
-        self.server = ("127.0.0.1", 8888)
+        self.socket_address = ("localhost", 8888)
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client_socket.connect(self.server)
+        self.client_socket.connect(self.socket_address)
 
     def send_message(self, message: bytes):
         size = len(message)
         try:
-            self.client_socket.sendall(message)
+            self.client_socket.send(message)
             response = self.client_socket.recv(BUFFER_SIZE)
-            return True
         except OSError:
-            return False
+            pass
+
+    def close(self):
+        self.client_socket.shutdown(socket.SHUT_RDWR)
+        self.client_socket.close()
+
 
     @staticmethod
     def create_message(size: int):
@@ -35,17 +39,17 @@ class ClientV6(Client):
         self.protocol = "IPv6"
 
     def prepare(self):
-        self.server = ("::1", 8889)
+        self.socket_addr = ("::1", 8888, 0, 0)
         self.client_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        self.client_socket.connect(self.server)
+        self.client_socket.connect(self.socket_addr)
 
 
 def main():
-    # c = Client()
-    # c.send_message(b"XDv4")
+    clientv6 = ClientV6()
+    clientv6.send_message(b"XDv6")
 
-    c = ClientV6()
-    c.send_message(b"XDv6")
+    client = Client()
+    client.send_message(b"XDv4")
 
 
 if __name__ == '__main__':
