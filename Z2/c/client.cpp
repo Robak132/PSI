@@ -1,42 +1,84 @@
 // Client side C/C++ program to demonstrate Socket programming
-#include <stdio.h>
-#include <sys/socket.h>
 #include <arpa/inet.h>
-#include <unistd.h>
+#include <iostream>
+#include <netinet/in.h>
+#include <sstream>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <string>
+#include <sys/socket.h>
+#include <unistd.h>
 
-#define PORT 8080
+#define PORT 8888
 
-int main(int argc, char const *argv[])
-{
+class Client {
+private:
     int sock = 0, valread;
     struct sockaddr_in serv_addr;
-    char *hello = "Hello from client";
+    char const *hello = "Hello from client";
     char buffer[1024] = {0};
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-    {
-        printf("\n Socket creation error \n");
-        return -1;
-    }
+public:
+    Client() {
+        if ((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+            printf("\n Socket creation error \n");
+            exit(EXIT_FAILURE);
+        }
 
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(PORT);
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(PORT);
 
-    // Convert IPv4 and IPv6 addresses from text to binary form
-    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0)
-    {
-        printf("\nInvalid address/ Address not supported \n");
-        return -1;
-    }
+        // Convert IPv4 and IPv6 addresses from text to binary form
+        if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
+            printf("\nInvalid address/ Address not supported \n");
+            exit(EXIT_FAILURE);
+        }
 
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-    {
-        printf("\nConnection Failed \n");
-        return -1;
+        if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+            printf("\nConnection Failed \n");
+            exit(EXIT_FAILURE);
+        }
+        send(sock, hello, strlen(hello), 0);
+        printf("Hello message sent\n");
+        valread = read(sock, buffer, 1024);
+        printf("%s\n", buffer);
     }
-    send(sock , hello , strlen(hello) , 0 );
-    printf("Hello message sent\n");
-    valread = read( sock , buffer, 1024);
-    printf("%s\n",buffer );
+};
+class ClientV6 {
+private:
+    int sock = 0, valread;
+    struct sockaddr_in6 serv_addr;
+    char const *hello = "Hello from client";
+    char buffer[1024] = {0};
+public:
+    ClientV6() {
+        if ((sock = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+            printf("\n Socket creation error \n");
+            exit(EXIT_FAILURE);
+        }
+
+        serv_addr.sin6_family = AF_INET6;
+        serv_addr.sin6_port = htons(PORT);
+
+        // Convert IPv4 and IPv6 addresses from text to binary form
+        if (inet_pton(AF_INET6, "::1", &serv_addr.sin6_addr) <= 0) {
+            printf("\nInvalid address/ Address not supported \n");
+            exit(EXIT_FAILURE);
+        }
+
+        if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+            printf("\nConnection Failed \n");
+            exit(EXIT_FAILURE);
+        }
+        send(sock, hello, strlen(hello), 0);
+        printf("Hello message sent\n");
+        valread = read(sock, buffer, 1024);
+        printf("%s\n", buffer);
+    }
+};
+
+int main() {
+    ClientV6 clientV6 = ClientV6();
+    Client client = Client();
     return 0;
 }
