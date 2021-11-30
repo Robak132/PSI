@@ -26,7 +26,6 @@ class Client:
         self.client_socket.shutdown(socket.SHUT_RDWR)
         self.client_socket.close()
 
-
     @staticmethod
     def create_message(size: int):
         message = bytes(f"{size}", encoding="utf8")
@@ -40,9 +39,9 @@ class ClientV6(Client):
         self.protocol = "IPv6"
 
     def prepare(self):
-        self.socket_addr = ("::1", 8888, 0, 0)
+        self.socket_address = ("::1", 8888, 0, 0)
         self.client_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        self.client_socket.connect(self.socket_addr)
+        self.client_socket.connect(self.socket_address)
 
 
 def main():

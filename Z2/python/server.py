@@ -17,17 +17,18 @@ class Server:
 
     def run(self):
         while True:
-            conn, addr = self.server_socket.accept()
-            with conn:
-                print(f'{self.protocol}: Connected by {addr}')
-                data = conn.recv(1024)
-                self.print_message(addr, data)
-                conn.send(data)
-                conn.close()
-            print(f'{self.protocol}: Connection with {addr} ended')
+            connection, address = self.server_socket.accept()
+            with connection:
+                print(f'{self.protocol}: Connected by {address}')
+                data = connection.recv(1024)
+                self.print_message(address, data)
+                connection.send(data)
+                connection.close()
+            print(f'{self.protocol}: Connection with {address} ended')
 
     def print_message(self, address, message):
-        print(f"{self.protocol}: Received message: {message.decode('utf-8')} [{len(message)}] from {address[0]}:{address[1]}")
+        print(f"{self.protocol}: Received message: {message.decode('utf-8')}"
+              f"[{len(message)}] from {address[0]}:{address[1]}")
 
 
 class ServerV6(Server):
