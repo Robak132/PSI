@@ -1,24 +1,26 @@
 // Server side C/C++ program to demonstrate Socket programming
 #include <unistd.h>
-#include <stdio.h>
+#include <cstdio>
 #include <sys/socket.h>
-#include <stdlib.h>
+#include <cstdlib>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string>
-#include <string.h>
+#include <cstring>
 #include <iostream>
-#include <sstream>
-#include <signal.h>
+#include <csignal>
 
 #define ADDRESS_V4 "127.0.0.1"
 #define PORT_V4 8888
+
+#define ADDRESS_V6 "::1"
 #define PORT_V6 8888
+
 #define BUFFER_SIZE 102400
 
 class Server {
 private:
-    int socket_fd, connection_socket, valread;
+    int socket_fd, connection_socket;
     struct sockaddr_in socket_address;
     int socket_address_len = sizeof(socket_address);
     char buffer[BUFFER_SIZE] = {0};
@@ -69,7 +71,7 @@ public:
             perror("accept");
             exit(EXIT_FAILURE);
         }
-        inet_ntop(AF_INET6, &(socket_address.sin_addr), str_addr, sizeof(str_addr));
+        inet_ntop(AF_INET, &(socket_address.sin_addr), str_addr, sizeof(str_addr));
         std::cout << protocol << ": Connection by " << str_addr << ":" << ntohs(socket_address.sin_port) << std::endl;
         read(connection_socket, buffer, 1024);
         std::cout << protocol << ": Received message: " << buffer << " from " << str_addr << ":" << ntohs(socket_address.sin_port) << std::endl;
@@ -79,7 +81,7 @@ public:
 };
 class ServerV6 {
 private:
-    int socket_fd, connection_socket, read_successfull;
+    int socket_fd, connection_socket;
     struct sockaddr_in6 socket_address;
     int socket_address_len = sizeof(socket_address);
     char buffer[BUFFER_SIZE] = {0};
@@ -111,8 +113,8 @@ public:
         // Setup socket
         memset((char *) &socket_address, 0, sizeof(socket_address));
         socket_address.sin6_family = AF_INET6;
-        socket_address.sin6_addr = in6addr_any;
         socket_address.sin6_port = htons(PORT_V6);
+        inet_ntop(AF_INET, &(socket_address.sin6_addr), ADDRESS_V6, sizeof(ADDRESS_V6));
 
         // Bind socket to address
         if (bind(socket_fd, (struct sockaddr *) &socket_address, sizeof(socket_address)) < 0) {
@@ -131,7 +133,7 @@ public:
         }
         inet_ntop(AF_INET6, &(socket_address.sin6_addr), str_addr, sizeof(str_addr));
         std::cout << protocol << ": Connection by " << str_addr << ":" << ntohs(socket_address.sin6_port) << std::endl;
-        read_successfull = read(connection_socket, buffer, 1024);
+        read(connection_socket, buffer, 1024);
         std::cout << protocol << ": Received message: " << buffer << " from " << str_addr << ":" << ntohs(socket_address.sin6_port) << std::endl;
         send(connection_socket, buffer, strlen(buffer), 0);
         std::cout << protocol << ": Connection with " << str_addr << ":" << ntohs(socket_address.sin6_port) << " ended" << std::endl;
@@ -139,15 +141,14 @@ public:
 };
 
 bool sigint_catcher = false;
-void siginthandler(int param)
-{
+void sigint_handler(int param) {
     sigint_catcher = true;
     printf("\nUser pressed Ctrl+C\n");
     // exit(1); // we're not using it since we want to exit the main loop and free resources there.
 }
 
 int main() {
-    signal(SIGINT, siginthandler);
+    signal(SIGINT, sigint_handler);
 
     Server server = Server();
     ServerV6 serverV6 = ServerV6();
@@ -168,8 +169,8 @@ int main() {
         timeval interval;
         interval.tv_sec = 1;
 
-        int retval = select(fd_max + 1, &socket_fds, NULL, NULL, &interval);
-        printf("retval: %d\n", retval);
+        int retval = select(fd_max + 1, &socket_fds, nullptr, nullptr, &interval);
+//        printf("retval: %d\n", retval);
         if (retval == -1)
         {   // happens usually when select() fails. For some reason, it also happens after SIGINT, even with our custom SIGINT handler.
             printf("Select failed.");
@@ -177,7 +178,7 @@ int main() {
         }
         else if (retval == 0)
         {
-            printf("Timeout - no incoming connections. Time to check if SIGINT arrived.\n");
+//            printf("Timeout - no incoming connections. Time to check if SIGINT arrived.\n");
         }
         else
         {
@@ -189,7 +190,7 @@ int main() {
             {
                 serverV6.handle_connection();
             }
-            else 
+            else
             {
                 printf("That's kinda unexpected\n");
             }

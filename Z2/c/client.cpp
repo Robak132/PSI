@@ -1,12 +1,9 @@
 // Client side C/C++ program to demonstrate Socket programming
 #include <arpa/inet.h>
-#include <iostream>
 #include <netinet/in.h>
-#include <sstream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <string>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -14,7 +11,7 @@
 
 class Client {
 private:
-    int sock = 0, valread;
+    int sock = 0;
     struct sockaddr_in serv_addr;
     char const *hello = "Hello from client V4";
     char buffer[1024] = {0};
@@ -40,13 +37,13 @@ public:
         }
         send(sock, hello, strlen(hello), 0);
         printf("Hello message sent\n");
-        valread = read(sock, buffer, 1024);
+        read(sock, buffer, 1024);
         printf("%s\n", buffer);
     }
 };
 class ClientV6 {
 private:
-    int sock = 0, valread;
+    int sock = 0;
     struct sockaddr_in6 serv_addr;
     char const *hello = "Hello from client V6";
     char buffer[1024] = {0};
@@ -57,6 +54,7 @@ public:
             exit(EXIT_FAILURE);
         }
 
+        memset((char *) &serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin6_family = AF_INET6;
         serv_addr.sin6_port = htons(PORT);
 
@@ -72,7 +70,7 @@ public:
         }
         send(sock, hello, strlen(hello), 0);
         printf("Hello message sent\n");
-        valread = read(sock, buffer, 1024);
+        read(sock, buffer, 1024);
         printf("%s\n", buffer);
     }
 };
