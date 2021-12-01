@@ -77,6 +77,7 @@ public:
 
 int main() {
     Client client = Client();
+    sleep(2); // Python jest za wolny w porównaniu do C++
     ClientV6 clientV6 = ClientV6();
     return 0;
 }
