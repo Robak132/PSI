@@ -20,9 +20,11 @@ class Server:
             connection, address = self.server_socket.accept()
             with connection:
                 print(f'{self.protocol}: Connected by {address}')
-                data = connection.recv(1024)
-                self.print_message(address, data)
-                connection.send(data)
+                while True:
+                    data = connection.recv(BUFFER_SIZE)
+                    if not data:
+                        break
+                    self.print_message(address, data)
                 connection.close()
             print(f'{self.protocol}: Connection with {address} ended')
 
@@ -44,6 +46,7 @@ class ServerV6(Server):
 
 
 if __name__ == '__main__':
+    BUFFER_SIZE = 100
     try:
         threading.Thread(target=Server("127.0.0.1", 8888).run).start()
         threading.Thread(target=ServerV6("::1", 8888).run).start()

@@ -14,11 +14,8 @@ class Client:
         self.client_socket.connect(self.socket_address)
 
     def send_message(self, message: bytes):
-        size = len(message)
         try:
-            self.client_socket.send(message)
-            response = self.client_socket.recv(BUFFER_SIZE)
-            print(response.decode('utf-8'))
+            self.client_socket.sendall(message)
         except OSError:
             pass
 
@@ -46,12 +43,12 @@ class ClientV6(Client):
 
 def main():
     client = Client()
-    client.send_message(b"XDv4")
+    client.send_message(b"1"*500+b"2"*500)
     client.close()
 
-    clientv6 = ClientV6()
-    clientv6.send_message(b"XDv6")
-    clientv6.close()
+    client_v6 = ClientV6()
+    client_v6.send_message(b"3"*500+b"4"*500)
+    client_v6.close()
 
 
 if __name__ == '__main__':
