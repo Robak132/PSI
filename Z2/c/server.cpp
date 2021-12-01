@@ -9,6 +9,7 @@
 #include <string.h>
 #include <iostream>
 #include <sstream>
+#include <signal.h>
 
 #define ADDRESS_V4 "127.0.0.1"
 #define PORT_V4 8888
@@ -137,14 +138,23 @@ public:
     }
 };
 
+bool sigint_catcher = false;
+void siginthandler(int param)
+{
+    sigint_catcher = true;
+    printf("\nUser pressed Ctrl+C\n");
+    // exit(1); // we're not using it since we want to exit the main loop and free resources there.
+}
 
 int main() {
+    signal(SIGINT, siginthandler);
+
     Server server = Server();
     ServerV6 serverV6 = ServerV6();
 
     fd_set socket_fds; // socket file descriptors
 
-    while (1)
+    while (!sigint_catcher)
     {
         int sock_v4_fd = server.get_socket_fd();
         int sock_v6_fd = serverV6.get_socket_fd();
@@ -155,16 +165,19 @@ int main() {
 
         int fd_max = std::max(sock_v6_fd, sock_v4_fd);
 
-        int retval = select(fd_max + 1, &socket_fds, NULL, NULL, NULL);
+        timeval interval;
+        interval.tv_sec = 1;
+
+        int retval = select(fd_max + 1, &socket_fds, NULL, NULL, &interval);
         printf("retval: %d\n", retval);
         if (retval == -1)
-        {
-            printf("Select error\n");
-            return -1;
+        {   // happens usually when select() fails. For some reason, it also happens after SIGINT, even with our custom SIGINT handler.
+            printf("Select failed.");
+            continue;
         }
         else if (retval == 0)
         {
-            printf("Timeout - time to check if SIGINT arrived\n");
+            printf("Timeout - no incoming connections. Time to check if SIGINT arrived.\n");
         }
         else
         {
@@ -178,11 +191,12 @@ int main() {
             }
             else 
             {
-                printf("Brak nowych wiadomosci. Wut???\n");
+                printf("That's kinda unexpected\n");
             }
         }
-
     }
-
+    // ##########################################
+    // # Here we need to free sockets and stuff #
+    // ##########################################
     return 0;
 }
