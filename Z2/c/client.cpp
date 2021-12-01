@@ -5,19 +5,17 @@
 #include <cstring>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <string>
+#include <iostream>
 
 #define ADDRESS_V4 "127.0.0.1"
 #define ADDRESS_V6 "::1"
 #define PORT 8888
 
-#define BUFFER_SIZE 1024
-
 class Client {
 private:
     int sock = 0;
     struct sockaddr_in serv_addr{};
-    char const *hello = "Hello from client V4";
-    char buffer[BUFFER_SIZE] = {0};
 public:
     Client() {
         if ((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
@@ -38,10 +36,10 @@ public:
             printf("\nConnection Failed \n");
             exit(EXIT_FAILURE);
         }
-        send(sock, hello, strlen(hello), 0);
-        printf("Hello message sent\n");
-        read(sock, buffer, BUFFER_SIZE);
-        printf("%s\n", buffer);
+        std::string str_message = std::string(500, '1') + std::string(500, '2');
+        char *message = &str_message[0];
+        send(sock, message, strlen(message), 0);
+        close(sock);
     }
 };
 class ClientV6 {
@@ -49,7 +47,6 @@ private:
     int sock = 0;
     struct sockaddr_in6 serv_addr;
     char const *hello = "Hello from client V6";
-    char buffer[BUFFER_SIZE] = {0};
 public:
     ClientV6() {
         if ((sock = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP)) < 0) {
@@ -71,10 +68,10 @@ public:
             printf("\nConnection Failed \n");
             exit(EXIT_FAILURE);
         }
-        send(sock, hello, strlen(hello), 0);
-        printf("Hello message sent\n");
-        read(sock, buffer, BUFFER_SIZE);
-        printf("%s\n", buffer);
+        std::string str_message = std::string(500, '3') + std::string(500, '4');
+        char *message = &str_message[0];
+        send(sock, message, strlen(message), 0);
+        close(sock);
     }
 };
 

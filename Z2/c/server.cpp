@@ -15,14 +15,14 @@
 #define ADDRESS_V6 "::1"
 #define PORT_V6 8888
 
-#define BUFFER_SIZE 500
+#define BUFFER_SIZE 100
 
 class Server {
 private:
     int socket_fd, connection_socket;
     struct sockaddr_in socket_address;
     int socket_address_len = sizeof(socket_address);
-    char buffer[BUFFER_SIZE] = {0};
+    char buffer[BUFFER_SIZE+1] = {0}; // End character on end
     char str_addr[INET_ADDRSTRLEN];
     std::string protocol;
 public:
@@ -72,9 +72,10 @@ public:
         }
         inet_ntop(AF_INET, &(socket_address.sin_addr), str_addr, sizeof(str_addr));
         std::cout << protocol << ": Connection by " << str_addr << ":" << ntohs(socket_address.sin_port) << std::endl;
-        read(connection_socket, buffer, 1024);
-        std::cout << protocol << ": Received message: " << buffer << " from " << str_addr << ":" << ntohs(socket_address.sin_port) << std::endl;
-        send(connection_socket, buffer, strlen(buffer), 0);
+        while ((recv(connection_socket, buffer, BUFFER_SIZE, 0)) > 0) {
+            std::cout << protocol << ": Received message: " << buffer << " from " << str_addr << ":" << ntohs(socket_address.sin_port) << std::endl;
+        }
+        close(connection_socket);
         std::cout << protocol << ": Connection with " << str_addr << ":" << ntohs(socket_address.sin_port) << " ended" << std::endl;
     }
 };
@@ -132,9 +133,11 @@ public:
         }
         inet_ntop(AF_INET6, &(socket_address.sin6_addr), str_addr, sizeof(str_addr));
         std::cout << protocol << ": Connection by " << str_addr << ":" << ntohs(socket_address.sin6_port) << std::endl;
-        read(connection_socket, buffer, 1024);
+        while ((recv(connection_socket, buffer, BUFFER_SIZE, 0)) > 0) {
+            std::cout << protocol << ": Received message: " << buffer << " from " << str_addr << ":" << ntohs(socket_address.sin6_port) << std::endl;
+        }
         std::cout << protocol << ": Received message: " << buffer << " from " << str_addr << ":" << ntohs(socket_address.sin6_port) << std::endl;
-        send(connection_socket, buffer, strlen(buffer), 0);
+        close(connection_socket);
         std::cout << protocol << ": Connection with " << str_addr << ":" << ntohs(socket_address.sin6_port) << " ended" << std::endl;
     }
 };
