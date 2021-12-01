@@ -1,4 +1,3 @@
-// Client side C/C++ program to demonstrate Socket programming
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <cstdio>
@@ -7,14 +6,18 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#define ADDRESS_V4 "127.0.0.1"
+#define ADDRESS_V6 "::1"
 #define PORT 8888
+
+#define BUFFER_SIZE 1024
 
 class Client {
 private:
     int sock = 0;
-    struct sockaddr_in serv_addr;
+    struct sockaddr_in serv_addr{};
     char const *hello = "Hello from client V4";
-    char buffer[1024] = {0};
+    char buffer[BUFFER_SIZE] = {0};
 public:
     Client() {
         if ((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
@@ -26,7 +29,7 @@ public:
         serv_addr.sin_port = htons(PORT);
 
         // Convert IPv4 and IPv6 addresses from text to binary form
-        if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
+        if (inet_pton(AF_INET, ADDRESS_V4, &serv_addr.sin_addr) <= 0) {
             printf("\nInvalid address/ Address not supported \n");
             exit(EXIT_FAILURE);
         }
@@ -37,7 +40,7 @@ public:
         }
         send(sock, hello, strlen(hello), 0);
         printf("Hello message sent\n");
-        read(sock, buffer, 1024);
+        read(sock, buffer, BUFFER_SIZE);
         printf("%s\n", buffer);
     }
 };
@@ -46,7 +49,7 @@ private:
     int sock = 0;
     struct sockaddr_in6 serv_addr;
     char const *hello = "Hello from client V6";
-    char buffer[1024] = {0};
+    char buffer[BUFFER_SIZE] = {0};
 public:
     ClientV6() {
         if ((sock = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP)) < 0) {
@@ -59,7 +62,7 @@ public:
         serv_addr.sin6_port = htons(PORT);
 
         // Convert IPv4 and IPv6 addresses from text to binary form
-        if (inet_pton(AF_INET6, "::1", &serv_addr.sin6_addr) <= 0) {
+        if (inet_pton(AF_INET6, ADDRESS_V6, &serv_addr.sin6_addr) <= 0) {
             printf("\nInvalid address/ Address not supported \n");
             exit(EXIT_FAILURE);
         }
@@ -70,7 +73,7 @@ public:
         }
         send(sock, hello, strlen(hello), 0);
         printf("Hello message sent\n");
-        read(sock, buffer, 1024);
+        read(sock, buffer, BUFFER_SIZE);
         printf("%s\n", buffer);
     }
 };

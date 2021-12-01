@@ -1,4 +1,3 @@
-// Server side C/C++ program to demonstrate Socket programming
 #include <unistd.h>
 #include <cstdio>
 #include <sys/socket.h>
@@ -16,7 +15,7 @@
 #define ADDRESS_V6 "::1"
 #define PORT_V6 8888
 
-#define BUFFER_SIZE 102400
+#define BUFFER_SIZE 500
 
 class Server {
 private:
