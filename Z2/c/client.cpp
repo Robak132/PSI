@@ -16,7 +16,7 @@ class Client {
 private:
     int sock = 0, valread;
     struct sockaddr_in serv_addr;
-    char const *hello = "Hello from client";
+    char const *hello = "Hello from client V4";
     char buffer[1024] = {0};
 public:
     Client() {
@@ -48,7 +48,7 @@ class ClientV6 {
 private:
     int sock = 0, valread;
     struct sockaddr_in6 serv_addr;
-    char const *hello = "Hello from client";
+    char const *hello = "Hello from client V6";
     char buffer[1024] = {0};
 public:
     ClientV6() {
@@ -78,7 +78,7 @@ public:
 };
 
 int main() {
-    ClientV6 clientV6 = ClientV6();
     Client client = Client();
+    ClientV6 clientV6 = ClientV6();
     return 0;
 }
