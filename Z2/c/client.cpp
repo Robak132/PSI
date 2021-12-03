@@ -14,10 +14,13 @@
 
 class Client {
 private:
-    int sock = 0;
     struct sockaddr_in serv_addr{};
+protected:
+    int sock = 0;
 public:
-    Client() {
+    Client() = default;
+
+    virtual void prepare() {
         if ((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
             printf("\n Socket creation error \n");
             exit(EXIT_FAILURE);
@@ -36,19 +39,21 @@ public:
             printf("\nConnection Failed \n");
             exit(EXIT_FAILURE);
         }
-        std::string str_message = std::string(500, '1') + std::string(500, '2');
+    }
+    void send_message(std::string str_message) const {
         char *message = &str_message[0];
         send(sock, message, strlen(message), 0);
+    }
+    void close_socket() const {
         close(sock);
     }
 };
-class ClientV6 {
+class ClientV6 : public Client {
 private:
-    int sock = 0;
-    struct sockaddr_in6 serv_addr;
-    char const *hello = "Hello from client V6";
+    struct sockaddr_in6 serv_addr{};
 public:
-    ClientV6() {
+    ClientV6() : Client() {}
+    void prepare() override {
         if ((sock = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP)) < 0) {
             printf("\n Socket creation error \n");
             exit(EXIT_FAILURE);
@@ -68,16 +73,20 @@ public:
             printf("\nConnection Failed \n");
             exit(EXIT_FAILURE);
         }
-        std::string str_message = std::string(500, '3') + std::string(500, '4');
-        char *message = &str_message[0];
-        send(sock, message, strlen(message), 0);
-        close(sock);
     }
 };
 
 int main() {
     Client client = Client();
+    client.prepare();
+    client.send_message(std::string(500, '1') + std::string(500, '2'));
+    client.close_socket();
+
     sleep(2); // Python jest za wolny w porównaniu do C++
+
     ClientV6 clientV6 = ClientV6();
+    clientV6.prepare();
+    clientV6.send_message(std::string(500, '3') + std::string(500, '4'));
+    clientV6.close_socket();
     return 0;
 }
