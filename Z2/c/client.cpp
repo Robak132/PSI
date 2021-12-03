@@ -17,9 +17,11 @@ private:
     struct sockaddr_in serv_addr{};
 protected:
     int sock = 0;
+    std::string protocol;
 public:
-    Client() = default;
-
+    explicit Client(std::string protocol_name="IPv4") {
+        protocol = protocol_name;
+    }
     virtual void prepare() {
         if ((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
             printf("\n Socket creation error \n");
@@ -41,6 +43,7 @@ public:
         }
     }
     void send_message(std::string str_message) const {
+        std::cout << protocol << ": Sending message: " << str_message << std::endl;
         char *message = &str_message[0];
         send(sock, message, strlen(message), 0);
     }
@@ -52,7 +55,9 @@ class ClientV6 : public Client {
 private:
     struct sockaddr_in6 serv_addr{};
 public:
-    ClientV6() : Client() {}
+    ClientV6(std::string protocol_name="IPv6") : Client() {
+         protocol = protocol_name;
+    }
     void prepare() override {
         if ((sock = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP)) < 0) {
             printf("\n Socket creation error \n");
