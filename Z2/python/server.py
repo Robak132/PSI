@@ -18,6 +18,7 @@ class Server:
     def run(self):
         while True:
             connection, address = self.server_socket.accept()
+            connection.settimeout(10.0)
             with connection:
                 print(f'{self.protocol}: Connected by {address}')
                 while True:

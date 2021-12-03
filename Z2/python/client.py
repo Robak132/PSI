@@ -11,6 +11,7 @@ class Client:
     def prepare(self):
         self.socket_address = ("localhost", 8888)
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_socket.settimeout(10.0)
         self.client_socket.connect(self.socket_address)
 
     def send_message(self, message: bytes):
@@ -38,17 +39,17 @@ class ClientV6(Client):
     def prepare(self):
         self.socket_address = ("::1", 8888, 0, 0)
         self.client_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        self.client_socket.settimeout(10.0)
         self.client_socket.connect(self.socket_address)
+        self.client_socket.settimeout(None)
 
 
 def main():
     client = Client()
     client.send_message(b"1"*500+b"2"*500)
-    client.close()
 
     client_v6 = ClientV6()
     client_v6.send_message(b"3"*500+b"4"*500)
-    client_v6.close()
 
 
 if __name__ == '__main__':
