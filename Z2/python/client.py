@@ -1,26 +1,44 @@
 import socket
+import threading
+import time
 
 
 class Client:
-    def __init__(self):
+    def __init__(self, address, port, address_family=socket.AF_INET):
         self.protocol = "IPv4"
         self.socket_address = None
         self.client_socket = None
-        self.prepare()
+        self.connected = False
+        self.prepare(address, port, address_family)
 
-    def prepare(self):
-        self.socket_address = ("localhost", 8888)
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    def prepare(self, address, port, address_family):
+        self.socket_address = (address, port)
+        self.client_socket = socket.socket(address_family, socket.SOCK_STREAM)
         self.client_socket.settimeout(10.0)
-        self.client_socket.connect(self.socket_address)
+        print(f"{self.protocol}: Trying to connect to: {self.socket_address}")
+        try:
+            self.client_socket.connect(self.socket_address)
+            self.connected = True
+        except socket.timeout:
+            print(f"{self.protocol}: Connection ended: Timeout")
+            self.connected = False
 
     def send_message(self, message: bytes):
-        try:
-            self.client_socket.sendall(message)
-        except OSError:
-            pass
+        if self.connected:
+            try:
+                print(f"{self.protocol}: Sending {message}")
+                self.client_socket.sendall(message)
+            except OSError:
+                pass
+
+    def send_message_with_lag(self, message: bytes, t: int):
+        if self.connected:
+            self.send_message(message)
+            print(f"{self.protocol}: Waiting for {t} s")
+            time.sleep(t)
 
     def close(self):
+        self.connected = False
         self.client_socket.shutdown(socket.SHUT_RDWR)
         self.client_socket.close()
 
@@ -32,28 +50,16 @@ class Client:
 
 
 class ClientV6(Client):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, address, port, address_family=socket.AF_INET6):
+        super().__init__(address, port, address_family)
         self.protocol = "IPv6"
-
-    def prepare(self):
-        self.socket_address = ("::1", 8888, 0, 0)
-        self.client_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        self.client_socket.settimeout(10.0)
-        self.client_socket.connect(self.socket_address)
-        self.client_socket.settimeout(None)
-
-
-def main():
-    client = Client()
-    client.send_message(b"1"*500+b"2"*500)
-
-    client_v6 = ClientV6()
-    client_v6.send_message(b"3"*500+b"4"*500)
 
 
 if __name__ == '__main__':
     PORT = 8888
-    BUFFER_SIZE = 102400  # >65507
 
-    main()
+    client1 = Client("localhost", PORT)
+    client1.send_message_with_lag(b"1" * 100, 12)
+
+    client2 = Client("10.0.0.0", PORT)
+    client2.send_message(b"1" * 100)

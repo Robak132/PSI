@@ -1,5 +1,6 @@
 import threading
 import socket
+import time
 
 
 class Server:
@@ -17,17 +18,20 @@ class Server:
 
     def run(self):
         while True:
-            connection, address = self.server_socket.accept()
-            connection.settimeout(10.0)
-            with connection:
-                print(f'{self.protocol}: Connected by {address}')
-                while True:
-                    data = connection.recv(BUFFER_SIZE)
-                    if not data:
-                        break
-                    self.print_message(address, data)
-                connection.close()
-            print(f'{self.protocol}: Connection with {address} ended')
+            try:
+                connection, address = self.server_socket.accept()
+                connection.settimeout(10)
+                with connection:
+                    print(f'{self.protocol}: Connected by {address}')
+                    while True:
+                        data = connection.recv(BUFFER_SIZE)
+                        if not data:
+                            break
+                        self.print_message(address, data)
+                    connection.close()
+                print(f'{self.protocol}: Connection with {address} ended')
+            except socket.timeout:
+                print(f'{self.protocol}: Connection ended: Timeout')
 
     def print_message(self, address, message):
         print(f"{self.protocol}: Received message: {message.decode('utf-8')}"
