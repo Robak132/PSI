@@ -21,6 +21,7 @@ protected:
     const char* protocol;
     const char* address;
     int port;
+    bool connected = true;
 public:
     Client(const char* _address, int _port, const char* protocol_name="IPv4") {
         address = _address;
@@ -65,6 +66,7 @@ public:
                 }
             } else {
                 std::cout << protocol << ": Connection refused" << std::endl;
+                connected = false;
                 break;
             }
         }
@@ -73,9 +75,11 @@ public:
         fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, NULL) & (~O_NONBLOCK));
     }
     void send_message(std::string str_message) const {
-        std::cout << protocol << ": Sending message: " << str_message << std::endl;
-        char *message = &str_message[0];
-        send(sock, message, strlen(message), 0);
+        if (connected) {
+            std::cout << protocol << ": Sending message: " << str_message << std::endl;
+            char *message = &str_message[0];
+            send(sock, message, strlen(message), 0);
+        }
     }
 };
 class ClientV6 : public Client {
@@ -125,6 +129,7 @@ public:
                 }
             } else {
                 std::cout << protocol << ": Connection refused" << std::endl;
+                connected = false;
                 break;
             }
         }
