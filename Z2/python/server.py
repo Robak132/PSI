@@ -14,13 +14,13 @@ class Server:
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind((address, port))
+        server_socket.settimeout(10)
         return server_socket
 
     def run(self):
         while True:
             try:
                 connection, address = self.server_socket.accept()
-                connection.settimeout(10)
                 with connection:
                     print(f'{self.protocol}: Connected by {address}')
                     while True:
@@ -32,6 +32,7 @@ class Server:
                 print(f'{self.protocol}: Connection with {address} ended')
             except socket.timeout:
                 print(f'{self.protocol}: Connection ended: Timeout')
+                break
 
     def print_message(self, address, message):
         print(f"{self.protocol}: Received message: {message.decode('utf-8')}"
@@ -47,6 +48,7 @@ class ServerV6(Server):
         server_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind((address, port, 0, 0))
+        server_socket.settimeout(10)
         return server_socket
 
 

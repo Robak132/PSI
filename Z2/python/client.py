@@ -59,7 +59,10 @@ if __name__ == '__main__':
     PORT = 8888
 
     client1 = Client("localhost", PORT)
-    client1.send_message_with_lag(b"1" * 100, 12)
+    client1.send_message(b"1" * 500 + b"2" * 500)
 
-    client2 = Client("10.0.0.0", PORT)
-    client2.send_message(b"1" * 100)
+    client2 = ClientV6("::1", PORT)
+    client2.send_message(b"3" * 500 + b"4" * 500)
+
+    client3 = Client("10.0.0.0", PORT)
+    client3.send_message(b"1" * 500 + b"2" * 500)
