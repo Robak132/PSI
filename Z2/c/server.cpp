@@ -8,6 +8,7 @@
 #include <cstring>
 #include <iostream>
 #include <csignal>
+#include <fcntl.h>
 
 #define ADDRESS_V4 "127.0.0.1"
 #define PORT_V4 8888
@@ -19,11 +20,11 @@
 
 class Server {
 private:
-    int socket_fd, connection_socket{};
     struct sockaddr_in socket_address{};
     int socket_address_len = sizeof(socket_address);
-    char buffer[BUFFER_SIZE+1] = {0}; // End character on end
-    char str_addr[INET_ADDRSTRLEN]{};
+protected:
+    int socket_fd{};
+    char buffer[BUFFER_SIZE+1] = {0};
     std::string protocol;
 public:
     explicit Server(std::string protocol_name="IPv4") {
@@ -35,6 +36,9 @@ public:
             perror("socket failed");
             exit(EXIT_FAILURE);
         }
+
+        // Set non-blocking
+        fcntl(socket_fd, F_SETFL, fcntl(socket_fd, F_GETFL, NULL) | O_NONBLOCK);
 
         // Setup socket
         memset((char *) &socket_address, 0, sizeof(socket_address));
@@ -59,20 +63,32 @@ public:
             perror("listen");
             exit(EXIT_FAILURE);
         }
+        set_socket_fd(socket_fd);
         std::cout << protocol << ": Opened socket connection" << std::endl;
     }
-    virtual void handle_connection() {
+    virtual void accept_connection() {
+        int connection_socket;
         if ((connection_socket = accept(socket_fd, (struct sockaddr *) &socket_address, (socklen_t * ) & socket_address_len)) < 0) {
             perror("accept");
             exit(EXIT_FAILURE);
         }
-        inet_ntop(AF_INET, &(socket_address.sin_addr), str_addr, sizeof(str_addr));
-        std::cout << protocol << ": Connection by " << str_addr << ":" << ntohs(socket_address.sin_port) << std::endl;
+        receive_connection(connection_socket);
+    }
+    virtual void receive_connection(int connection_socket) {
+        char address[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(socket_address.sin_addr), address, sizeof(address));
+        int port = ntohs(socket_address.sin_port);
+
+        std::cout << protocol << ": Connection by " << address << ":" << port << std::endl;
         while ((recv(connection_socket, buffer, BUFFER_SIZE, 0)) > 0) {
-            std::cout << protocol << ": Received message: " << buffer << " from " << str_addr << ":" << ntohs(socket_address.sin_port) << std::endl;
+            std::cout << protocol << ": Received message: " << buffer << " from " << address << ":" << port << std::endl;
         }
         close(connection_socket);
-        std::cout << protocol << ": Connection with " << str_addr << ":" << ntohs(socket_address.sin_port) << " ended" << std::endl;
+        std::cout << protocol << ": Connection with " << address << ":" << port << " ended" << std::endl;
+    }
+
+    void set_socket_fd(int _socket_fd) {
+        socket_fd = _socket_fd;
     }
     int get_socket_fd() const {
         return socket_fd;
@@ -80,23 +96,22 @@ public:
 };
 class ServerV6 : public Server {
 private:
-    int socket_fd{}, connection_socket{};
     struct sockaddr_in6 socket_address{};
     int socket_address_len = sizeof(socket_address);
-    char buffer[BUFFER_SIZE] = {0};
-    char str_addr[INET6_ADDRSTRLEN]{};
-    std::string protocol;
 public:
     explicit ServerV6(std::string protocol_name="IPv6") : Server() {
         protocol = protocol_name;
     }
     void prepare() override {
+        int socket_fd;
+
         // Create socket file descriptor
         if ((socket_fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP)) == -1) {
             perror("socket failed");
             exit(EXIT_FAILURE);
         }
 
+        // Set options
         int opt = 1;
         int v6_only = 1;
         setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
@@ -119,21 +134,21 @@ public:
             perror("listen");
             exit(EXIT_FAILURE);
         }
+
+        set_socket_fd(socket_fd);
         std::cout << protocol << ": Opened socket connection" << std::endl;
     }
-    void handle_connection() override {
-        if ((connection_socket = accept(socket_fd, (struct sockaddr *) &socket_address, (socklen_t * ) & socket_address_len)) < 0) {
-            perror("accept");
-            exit(EXIT_FAILURE);
-        }
-        inet_ntop(AF_INET6, &(socket_address.sin6_addr), str_addr, sizeof(str_addr));
-        std::cout << protocol << ": Connection by " << str_addr << ":" << ntohs(socket_address.sin6_port) << std::endl;
+    void receive_connection(int connection_socket) override {
+        char address[INET6_ADDRSTRLEN];
+        inet_ntop(AF_INET6, &(socket_address.sin6_addr), address, sizeof(address));
+        int port = ntohs(socket_address.sin6_port);
+
+        std::cout << protocol << ": Connection by " << address << ":" << port << std::endl;
         while ((recv(connection_socket, buffer, BUFFER_SIZE, 0)) > 0) {
-            std::cout << protocol << ": Received message: " << buffer << " from " << str_addr << ":" << ntohs(socket_address.sin6_port) << std::endl;
+            std::cout << protocol << ": Received message: " << buffer << " from " << address << ":" << port << std::endl;
         }
-        std::cout << protocol << ": Received message: " << buffer << " from " << str_addr << ":" << ntohs(socket_address.sin6_port) << std::endl;
         close(connection_socket);
-        std::cout << protocol << ": Connection with " << str_addr << ":" << ntohs(socket_address.sin6_port) << " ended" << std::endl;
+        std::cout << protocol << ": Connection with " << address << ":" << port << " ended" << std::endl;
     }
 };
 
@@ -154,8 +169,7 @@ int main() {
 
     fd_set socket_fds; // socket file descriptors
 
-    while (!sigint_catcher)
-    {
+    while (!sigint_catcher) {
         int sock_v4_fd = server.get_socket_fd();
         int sock_v6_fd = serverV6.get_socket_fd();
 
@@ -165,33 +179,25 @@ int main() {
 
         int fd_max = std::max(sock_v6_fd, sock_v4_fd);
 
-        timeval interval;
-        interval.tv_sec = 1;
+        struct timeval interval{};
+        interval.tv_sec = 10;
 
         int retval = select(fd_max + 1, &socket_fds, nullptr, nullptr, &interval);
-//        printf("retval: %d\n", retval);
-        if (retval == -1)
-        {   // happens usually when select() fails. For some reason, it also happens after SIGINT, even with our custom SIGINT handler.
-//            printf("Select failed.");
+        if (retval == -1) {
+            // happens usually when select() fails. For some reason, it also happens after SIGINT, even with our custom SIGINT handler.
+            printf("Select failed.");
             continue;
         }
-        else if (retval == 0)
-        {
-//            printf("Timeout - no incoming connections. Time to check if SIGINT arrived.\n");
+        else if (retval == 0) {
+            printf("No incoming connections. Server timeout.\n");
+            exit(0);
         }
-        else
-        {
-            if (FD_ISSET(sock_v4_fd, &socket_fds))
-            {
-                server.handle_connection();
+        else {
+            if (FD_ISSET(sock_v4_fd, &socket_fds)) {
+                server.accept_connection();
             }
-            else if (FD_ISSET(sock_v6_fd, &socket_fds))
-            {
-                serverV6.handle_connection();
-            }
-            else
-            {
-                printf("That's kinda unexpected\n");
+            else if (FD_ISSET(sock_v6_fd, &socket_fds)) {
+                serverV6.accept_connection();
             }
         }
     }

@@ -27,14 +27,6 @@ Sprawdzić i przetestować działanie „między platformowe”, tj. klient w C 
 Zmodyfikować program serwera tak, aby bufor odbiorczy był mniejszy od wysyłanej jednorazowo przez klienta porcji danych. W wariancie Python wykonać eksperymenty z funkcjami send() i sendall(). Jak powinien zostać zmodyfikowany program klienta i serwera aby poprawnie obsłużyć komunikację? (uwaga – w zależności od wykonanej implementacji programu z punktu 2.1 mogą ale nie muszą poprawnie obsługiwać wariant transmisji z punktu 2.2).
 
 ### Zadanie 2.3
-Do wyboru:
-
-Python – posługując się funkcją settimeout() zmodyfikować program z Z 2.1 tak, aby obsługiwał timeout-y dla funkcji connect() i accept().
+Python – posługując się funkcją settimeout() zmodyfikować program z Z 2.1 tak, aby obsługiwał timeout-y dla funkcji connect() i accept().  
 
 C – zrealizować timeout dla accept() korzystając z funkcji select(); zrealizowac connect() w wersji nieblokującej.
-
-Na bazie wersji 2.1 – 2.2 napisać klienta oraz zmodyfikować serwer w następujący sposób:
-
-Klient powinien wysyłać do serwera strumień danych w pętli (nieskończona pętla zapisów buforów np. 1 kB). Serwer powinien odbierać dane, ale między odczytami realizować sztuczne opóźnienie (np. przy pomocy funkcji sleep(1)). W ten sposób symulujemy zjawisko odbiorcy, który „nie nadąża” za szybkim nadawcą. Stos TCP będzie spowalniał nadawcę, aby uniknąć tracenia danych. Należy zidentyfikować objawy tego zjawiska po stronie klienta (jak można to zrobić?) i krótko przedstawić swoje wnioski poparte uzyskanymi statystykami czasowymi.
-
-To zadanie należy wykonać korzystając z kodu klienta i serwera napisanych w języku C.
