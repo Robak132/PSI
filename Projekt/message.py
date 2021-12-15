@@ -23,7 +23,7 @@ class Message:
 
     @staticmethod
     def unpack(binary_data: bytes):
-        message_type, identifier, data, data_hash = struct.unpack(f"3si8s400s", binary_data)
+        message_type, identifier, data_hash, data  = struct.unpack(f"3si8s400s", binary_data)
         return Message(message_type.decode("utf-8"), identifier, data_hash, data)
 
     def check_hash(self) -> bool:

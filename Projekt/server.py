@@ -29,7 +29,7 @@ class SendMessageThreadv2(threading.Thread):
             message = DataMessage(self.message_id, self.messages[self.message_id])
             print(f"Package {self.message_id}/{len(self.messages)} sent")
             self.send_socket.sendto(message.pack(), self.address)
-            is_stopped = self._stop.wait(0.05)
+            is_stopped = self._stop.wait(0.005)
 
     def stop(self):
         self._stop.set()
@@ -89,10 +89,7 @@ class Server:
             self.send_thread.stop()
 
             print("Transmission ended", end="")
-            self.send_socket.sendto(QuitMessage(1), address)
-
-    def send_str(self, message: str, address=("127.0.0.1", 9900)):
-        self.send_socket.sendto(message.encode("utf-8"), address)
+            self.send_socket.sendto(QuitMessage(1).pack(), address)
 
     def wait_for_confirm(self, packet_number):
         ACK_id = None
