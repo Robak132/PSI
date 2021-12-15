@@ -3,8 +3,42 @@ import struct
 import threading
 import time
 
-from message import Message
+from message import Message    
 
+BUFFER = 128
+HEADER = 7
+
+class SendMessageThreadv2(threading.Thread):
+    def __init__(self, timeout, send_socket, messages, address):
+        super().__init__()
+        self._stop = threading.Event()
+        self.send_socket = send_socket
+        self.messages = messages
+        self.address = address
+        self.timeout = timeout
+        self.mes_number = 0
+
+        super().start()
+
+    def run(self):
+        print('run')
+        # time.sleep(0.5)
+        is_stopped = False
+        while not is_stopped:
+            self.message = Message(b"MSG" + bytes(str(self.mes_number).ljust(4), 'utf-8'), self.messages[0], len(self.messages[0])).pack()
+            print(f"Data no. {self.mes_number} sent [{len(self.message)}]")
+            self.send_socket.sendto(self.message, self.address)
+            is_stopped = self._stop.wait(0.02)
+
+    def stop(self):
+        self._stop.set()
+
+    def next_message(self):
+        self.mes_number += 1
+        if len(self.messages) == 0:
+            self.stop()
+        else:
+            self.messages.pop(0)
 
 class SendMessageThread(threading.Thread):
     def __init__(self, timeout, send_socket, message, address):
@@ -50,12 +84,14 @@ class Server:
             binary_data = bytes(data, encoding="utf-8")
             segments = self.split_str(binary_data, segment_size)
 
+            len_segments = len(segments) - 1
+            self.send_thread = SendMessageThreadv2(1, self.send_socket, segments, address)
             for i in range(len(segments)):
-                segment = segments[i]
-                print(f"Sending package {i}/{len(segments)-1}")
-                self.send_thread = SendMessageThread(1, self.send_socket, segment, address)
-                self.wait_for_confirm()
-                self.send_thread.stop()
+                print(f"Sending package {i}/{len_segments}")
+                self.wait_for_confirm(i)
+                self.send_thread.next_message()
+            
+            self.send_thread.stop()
 
             print("Transmission ended", end="")
             self.send_message(bytes("END", encoding="utf-8"), address)
@@ -66,11 +102,14 @@ class Server:
     def send_message(self, message: bytes, address):
         self.send_socket.sendto(message, address)
 
-    def wait_for_confirm(self):
-        binary_data = None
-        while binary_data != b"ACK":
+    def wait_for_confirm(self, packet_number):
+        binary_data = b''
+        while not binary_data.decode('utf-8').startswith(f'ACK{packet_number}'):  # if packet_number is not None else ''
+            print(f'expected: ACK{packet_number}')
+            print(f"received: {binary_data.decode('utf-8')}")
             binary_data = self.recv_socket.recv(BUFFER_SIZE)
-        print("ACK received\n")
+        print(f'expected: ACK{packet_number}')
+        print(f"received: {binary_data.decode('utf-8')}")
 
     def start(self):
         message_type = None
@@ -79,10 +118,10 @@ class Server:
         print(f"Waiting for client request")
         while message_type != b"REQUEST":
             binary_data, address = self.recv_socket.recvfrom(BUFFER_SIZE)
-            message_type = Message.unpack(binary_data).message_type
+            message_type = Message.unpack(binary_data, len(binary_data)).message_type
 
         print(f"Client request from {address[0]}:{address[1]}")
-        self.send_file("file.txt", 128, ("127.0.0.1", 9900))
+        self.send_file("file.txt", BUFFER - HEADER, ("127.0.0.1", 9900))
 
 
 if __name__ == '__main__':

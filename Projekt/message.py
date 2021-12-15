@@ -2,7 +2,7 @@ import struct
 
 
 class Message:
-    def __init__(self, message_type: bytes, data=b"", data_size=128):
+    def __init__(self, message_type: bytes, data=b"", data_size=121):
         self.message_type = message_type
         self.data = data
         self.data_size = data_size
@@ -12,5 +12,5 @@ class Message:
 
     @staticmethod
     def unpack(binary_data: bytes, data_size=128):
-        message_type, content = struct.unpack(f"7s{data_size}s", binary_data)
+        message_type, content = struct.unpack(f"7s{data_size - 7}s", binary_data)
         return Message(message_type, content)
