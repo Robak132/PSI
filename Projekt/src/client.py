@@ -1,5 +1,4 @@
 import socket
-import time
 from message import Message, RequestMessage, ACKMessage
 
 
