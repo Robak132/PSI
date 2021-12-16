@@ -2,6 +2,7 @@ import socket
 import threading
 
 from message import Message, DataMessage, QuitMessage
+from DataProvider import DataProvider
 
 BUFFER = 400
 HEADER = 7
@@ -100,7 +101,7 @@ class SendMessageThread(threading.Thread):
 
 
 class Server:
-    def __init__(self):
+    def __init__(self, buffer_size: int):
         self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.recv_socket.bind(("127.0.0.1", 8800))
         self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -111,13 +112,16 @@ class Server:
         self.protocol = "IPv4"
         self.send_confirm = False
 
-    def send_file(self, filename: str, address):
-        with open(filename, 'r', encoding='utf-8') as file:
-            data = file.read()
-            binary_data = bytes(data, encoding="utf-8")
+        self.buffer_size = buffer_size
 
-            self.send_thread = CommunicationThread(self.send_socket, self.recv_socket, binary_data, address)
-            self.send_thread.join()
+    def send_file(self, filename: str, address):
+        data_prov = DataProvider()
+        data_prov.from_file(filename)
+        data = data_prov.get_data()
+        binary_data = bytes(data, encoding="utf-8")
+
+        self.send_thread = CommunicationThread(self.send_socket, self.recv_socket, binary_data, address)
+        self.send_thread.join()
 
     def start(self):
         message_type = None
@@ -127,14 +131,11 @@ class Server:
         while message_type != "REQ":
             binary_data, address = self.recv_socket.recvfrom(BUFFER_SIZE)
             message_type = Message.unpack(binary_data).message_type
-            pass
 
         print(f"Client request from {address[0]}:{address[1]}")
         self.send_file("file.txt", ("127.0.0.1", 9900))
 
 
 if __name__ == '__main__':
-    BUFFER_SIZE = 10240  # >65507
-
-    server = Server()
+    server = Server(10240)
     server.start()
