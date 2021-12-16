@@ -18,12 +18,8 @@ class Client:
             message = Message.unpack(binary_data)
             if message.message_type == "FIN":
                 break
-            elif message.message_type == 'MSG':
+            elif message.message_type == 'MSG' and message.check_hash():
                 print(f'Received {message.message_type}: {message.identifier}')
-                # Hash algorithm not working :C
-
-                # hash_good = message.check_hash()
-                # print(f'Data valid: {hash_good}')
                 if message.identifier == pkg_number + 1:
                     pkg_number += 1
                 full_data += message.data

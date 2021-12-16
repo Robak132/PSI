@@ -9,7 +9,7 @@ class Message:
         self.message_type = message_type    # 3 bytes: REQ, ERR, MSG, FIN, ACK
         self.identifier = identifier        # 4 bytes: int
         self.size = size                    # 4 bytes: int
-        if data_hash is None:               # 8 bytes: SHA-3 hash
+        if data_hash is None:               # 32 bytes: SHA-3 hash
             self.hash_algorith.update(data)
             self.data_hash = self.hash_algorith.digest()
         else:
@@ -17,7 +17,7 @@ class Message:
         self.data = data                    # 400 bytes
 
     def pack(self) -> bytes:
-        return struct.pack(f"3sii8s{self.size}s",
+        return struct.pack(f"3sii32s{self.size}s",
                            self.message_type.encode("utf-8"),
                            self.identifier,
                            self.size,
@@ -31,7 +31,7 @@ class Message:
         data_hash = None
         data = b""
         if size != 0:
-            data_hash, data = struct.unpack(f"12x8s{size}s", binary_data)
+            data_hash, data = struct.unpack(f"12x32s{size}s", binary_data)
 
         return Message(message_type.decode("utf-8"), identifier, size, data, data_hash)
 
