@@ -1,18 +1,20 @@
 import socket
 import threading
 
-from message import Message, DataMessage, QuitMessage
+from message import Message, DataMessage, QuitMessage, InfoMessage
 from data_provider import DataProvider
 
 
 class CommunicationThread(threading.Thread):
-    def __init__(self, send_socket, receive_socket, binary_data, address, buffer_size):
+    def __init__(self, binary_data, address, buffer_size):
         super().__init__()
         self.timeout = 1
 
-        self.send_socket = send_socket
-        self.receive_socket = receive_socket
-        self.receive_socket.settimeout(self.timeout)
+        self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.send_socket.bind(('', 0))
+        self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.recv_socket.bind(('', 0))
+        self.recv_socket.settimeout(self.timeout)
 
         self.message_idx = 0
         self.messages = self.split_str(binary_data, 400)
@@ -36,7 +38,7 @@ class CommunicationThread(threading.Thread):
 
     def confirm(self):
         try:
-            binary_data = self.receive_socket.recv(self.buffer_size)
+            binary_data = self.recv_socket.recv(self.buffer_size)
             message = Message.unpack(binary_data)
             if message.message_type == "ACK":
                 ACK_id = message.identifier
@@ -47,63 +49,12 @@ class CommunicationThread(threading.Thread):
             return
 
 
-# class SendMessageThreadv2(threading.Thread):
-#     def __init__(self, timeout, send_socket, messages, address):
-#         super().__init__()
-#         self._stop = threading.Event()
-#         self.send_socket = send_socket
-#         self.messages = messages
-#         self.address = address
-#         self.timeout = timeout
-#         self.message_id = 0
-#
-#         super().start()
-#
-#     def run(self):
-#         print('run')
-#         # time.sleep(0.5)
-#         is_stopped = False
-#         while not is_stopped:
-#             message = DataMessage(self.message_id, self.messages[self.message_id])
-#             print(f"Package {self.message_id}/{len(self.messages)} sent")
-#             self.send_socket.sendto(message.pack(), self.address)
-#             is_stopped = self._stop.wait(0.001)
-#
-#     def stop(self):
-#         self._stop.set()
-#
-#     def next_message(self):
-#         self.message_id += 1
-#
-#
-# class SendMessageThread(threading.Thread):
-#     def __init__(self, timeout, send_socket, message, address):
-#         super().__init__()
-#         self._stop = threading.Event()
-#         self.send_socket = send_socket
-#         self.message = message
-#         self.address = address
-#         self.timeout = timeout
-#
-#         super().start()
-#
-#     def run(self):
-#         is_stopped = False
-#         while not is_stopped:
-#             print(f"Data sent [{len(self.message)}]")
-#             self.send_socket.sendto(self.message, self.address)
-#             is_stopped = self._stop.wait(self.timeout)
-#
-#     def stop(self):
-#         self._stop.set()
-
-
 class Server:
     def __init__(self, buffer_size: int):
         self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.recv_socket.bind(("127.0.0.1", 8800))
+        self.recv_socket.bind(("127.0.0.1", 8801))
         self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.send_socket.bind(("127.0.0.1", 8888))
+        self.send_socket.bind(("127.0.0.1", 8881))
 
         self.send_thread = None
 
@@ -118,7 +69,10 @@ class Server:
         data = data_prov.get_data()
         binary_data = bytes(data, encoding="utf-8")
 
-        self.send_thread = CommunicationThread(self.send_socket, self.recv_socket, binary_data, address, self.buffer_size)
+        self.send_thread = CommunicationThread(binary_data, address, self.buffer_size)
+        message = InfoMessage(1, str(self.send_thread.recv_socket.getsockname()[1]).encode('utf-8')).pack()
+        print(self.send_thread.recv_socket.getsockname()[1])
+        self.send_socket.sendto(message, address)
         self.send_thread.join()
 
     def start(self):
@@ -131,7 +85,8 @@ class Server:
             message_type = Message.unpack(binary_data).message_type
 
         print(f"Client request from {address[0]}:{address[1]}")
-        self.send_file("../resources/file.txt", ("127.0.0.1", 9900))
+        self.send_file("../resources/file.txt", ("127.0.0.1", 9902))
+
 
 
 if __name__ == '__main__':

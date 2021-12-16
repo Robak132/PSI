@@ -6,7 +6,7 @@ class Message:
     def __init__(self, message_type: str, identifier: int, size=0, data=b"", data_hash=None):
         self.hash_algorith = hashlib.sha3_256()
 
-        self.message_type = message_type    # 3 bytes: REQ, ERR, MSG, FIN, ACK
+        self.message_type = message_type    # 3 bytes: REQ, ERR, MSG, FIN, ACK, INF
         self.identifier = identifier        # 4 bytes: int
         self.size = size                    # 4 bytes: int
         if data_hash is None:               # 32 bytes: SHA-3 hash
@@ -48,6 +48,11 @@ class RequestMessage(Message):
 class DataMessage(Message):
     def __init__(self, identifier: int, data: bytes):
         super().__init__("MSG", identifier, len(data), data)
+
+
+class InfoMessage(Message):
+    def __init__(self, identifier: int, data: bytes):
+        super().__init__("INF", identifier, len(data), data)
 
 
 class ACKMessage(Message):
