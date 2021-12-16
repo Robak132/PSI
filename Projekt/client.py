@@ -27,7 +27,7 @@ class Client:
                 # print(f'Data valid: {hash_good}')
                 if message.identifier == pkg_number + 1:
                     pkg_number += 1
-            full_data += message.data
+                full_data += message.data
             print(f"Sending ACK: {pkg_number}")
             self.send_socket.sendto(ACKMessage(pkg_number).pack(), ("127.0.0.1", 8800))
         print(full_data.decode('utf-8'))
