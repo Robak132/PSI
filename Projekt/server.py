@@ -29,7 +29,7 @@ class SendMessageThreadv2(threading.Thread):
             message = DataMessage(self.message_id, self.messages[self.message_id])
             print(f"Package {self.message_id}/{len(self.messages)} sent")
             self.send_socket.sendto(message.pack(), self.address)
-            is_stopped = self._stop.wait(0.005)
+            is_stopped = self._stop.wait(0.001)
 
     def stop(self):
         self._stop.set()
@@ -93,12 +93,17 @@ class Server:
 
     def wait_for_confirm(self, packet_number):
         ACK_id = None
-        while not ACK_id == packet_number:
-            binary_data = self.recv_socket.recv(BUFFER_SIZE)
-            message = Message.unpack(binary_data)
-            if message.message_type == "ACK":
-                ACK_id = message.identifier
-        print(f"received ACK: {ACK_id}")
+        try:
+            while not ACK_id == packet_number:
+                self.recv_socket.settimeout(5)
+                binary_data = self.recv_socket.recv(BUFFER_SIZE)
+                message = Message.unpack(binary_data)
+                if message.message_type == "ACK":
+                    ACK_id = message.identifier
+            print(f"received ACK: {ACK_id}")
+        except socket.timeout:
+            print(f"Timout")
+            self.send_thread.stop()
 
     def start(self):
         message_type = None
