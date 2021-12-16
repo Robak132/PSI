@@ -1,12 +1,51 @@
 import socket
-import struct
 import threading
-import time
 
 from message import Message, DataMessage, QuitMessage
 
 BUFFER = 400
 HEADER = 7
+
+
+class CommunicationThread(threading.Thread):
+    def __init__(self, send_socket, receive_socket, binary_data, address):
+        super().__init__()
+        self.timeout = 1
+
+        self.send_socket = send_socket
+        self.receive_socket = receive_socket
+        self.receive_socket.settimeout(1)
+
+        self.message_idx = 0
+        self.messages = self.split_str(binary_data, 400)
+        self.address = address
+
+        super().start()
+
+    @staticmethod
+    def split_str(data: bytes, segment_size: int):
+        return [data[i:i + segment_size] for i in range(0, len(data), segment_size)]
+
+    def run(self):
+        while self.message_idx != len(self.messages):
+            print(f"Data sent [{self.message_idx}/{len(self.messages)-1}]")
+            message = DataMessage(self.message_idx, self.messages[self.message_idx]).pack()
+            self.send_socket.sendto(message, self.address)
+            self.confirm()
+        print("Transmission ended", end="")
+        self.send_socket.sendto(QuitMessage(1).pack(), self.address)
+
+    def confirm(self):
+        try:
+            binary_data = self.receive_socket.recv(BUFFER_SIZE)
+            message = Message.unpack(binary_data)
+            if message.message_type == "ACK":
+                ACK_id = message.identifier
+                print(f"Received ACK: {ACK_id}")
+                if self.message_idx == ACK_id:
+                    self.message_idx += 1
+        except socket.timeout:
+            return
 
 
 class SendMessageThreadv2(threading.Thread):
@@ -72,38 +111,13 @@ class Server:
         self.protocol = "IPv4"
         self.send_confirm = False
 
-    @staticmethod
-    def split_str(data: bytes, segment_size: int):
-        return [data[i:i + segment_size] for i in range(0, len(data), segment_size)]
-
-    def send_file(self, filename: str, segment_size: int, address):
+    def send_file(self, filename: str, address):
         with open(filename, 'r', encoding='utf-8') as file:
             data = file.read()
             binary_data = bytes(data, encoding="utf-8")
-            messages = self.split_str(binary_data, segment_size)
 
-            self.send_thread = SendMessageThreadv2(1, self.send_socket, messages, address)
-            for i in range(len(messages)):
-                self.wait_for_confirm(i)
-                self.send_thread.next_message()
-            self.send_thread.stop()
-
-            print("Transmission ended", end="")
-            self.send_socket.sendto(QuitMessage(1).pack(), address)
-
-    def wait_for_confirm(self, packet_number):
-        ACK_id = None
-        try:
-            while not ACK_id == packet_number:
-                self.recv_socket.settimeout(5)
-                binary_data = self.recv_socket.recv(BUFFER_SIZE)
-                message = Message.unpack(binary_data)
-                if message.message_type == "ACK":
-                    ACK_id = message.identifier
-            print(f"received ACK: {ACK_id}")
-        except socket.timeout:
-            print(f"Timout")
-            self.send_thread.stop()
+            self.send_thread = CommunicationThread(self.send_socket, self.recv_socket, binary_data, address)
+            self.send_thread.join()
 
     def start(self):
         message_type = None
@@ -116,7 +130,7 @@ class Server:
             pass
 
         print(f"Client request from {address[0]}:{address[1]}")
-        self.send_file("file.txt", 400, ("127.0.0.1", 9900))
+        self.send_file("file.txt", ("127.0.0.1", 9900))
 
 
 if __name__ == '__main__':
