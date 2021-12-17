@@ -1,4 +1,4 @@
-from data_provider import DataProvider
+from src.data_provider import DataProvider
 
 
 class TestDataProvider:

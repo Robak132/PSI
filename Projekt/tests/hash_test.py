@@ -1,4 +1,4 @@
-from message import DataMessage
+from src.message import DataMessage
 
 
 class TestHash:

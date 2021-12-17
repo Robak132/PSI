@@ -1,6 +1,6 @@
-from data_provider import DataProvider
-from server import Server
-from client import Client
+from src.data_provider import DataProvider
+from src.server import Server
+from src.client import Client
 
 
 # class TestServerClientConnection:
