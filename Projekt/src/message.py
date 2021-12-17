@@ -41,8 +41,8 @@ class Message:
 
 
 class RequestMessage(Message):
-    def __init__(self, identifier: int):
-        super().__init__("REQ", identifier)
+    def __init__(self, identifier: int, port: int):
+        super().__init__("REQ", identifier, 4, struct.pack("i", port))
 
 
 class DataMessage(Message):

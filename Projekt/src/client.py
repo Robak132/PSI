@@ -38,7 +38,7 @@ class Client:
         self.send_socket.sendto(message, ("127.0.0.1", 8801))
 
     def request(self):
-        self.send_message(RequestMessage(1).pack())
+        self.send_message(RequestMessage(1, 9902).pack())
         self.receive()
 
 

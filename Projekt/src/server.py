@@ -1,4 +1,5 @@
 import socket
+import struct
 import threading
 
 from message import Message, DataMessage, QuitMessage, InfoMessage
@@ -76,17 +77,16 @@ class Server:
         self.send_thread.join()
 
     def start(self):
-        message_type = None
-        address = None
-
         print(f"Waiting for client request")
-        while message_type != "REQ":
+        while True:
             binary_data, address = self.recv_socket.recvfrom(self.buffer_size)
-            message_type = Message.unpack(binary_data).message_type
-
-        print(f"Client request from {address[0]}:{address[1]}")
-        self.send_file("../resources/file.txt", ("127.0.0.1", 9902))
-
+            message = Message.unpack(binary_data)
+            if message.message_type == "REQ":
+                print(f"Client request from {address[0]}:{address[1]}")
+                recv_port = struct.unpack("i", message.data)[0]
+                ip_address = address[0]
+                print(f"Sending stream to {ip_address}:{recv_port}")
+                self.send_file("../resources/file.txt", (ip_address, recv_port))
 
 
 if __name__ == '__main__':
