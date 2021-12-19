@@ -1,4 +1,4 @@
-from src.data_provider import DataProvider
+from src.streams import File
 from src.server import Server
 from src.client import Client
 
