@@ -4,8 +4,22 @@ import hashlib
 
 class Message:
     def __init__(self, message_type: str, identifier: int, size=0, data=b"", data_hash=None):
+        """
+        +-----+---+---+---+---+---+---+---+---+---+---+----+----+----+----+----+----+
+        |     | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 |
+        +-----+---+---+---+---+---+---+---+---+---+---+----+----+----+----+----+----+
+        |  0  |    TYPE   |   IDENTIFIER  |      SIZE      |          SHA-3         |
+        +-----+-----------+---------------+----------------+------------------------+
+        |  16 |                                SHA-3                                |
+        +-----+--------------------------------------------+------------------------+
+        |  32 |                    SHA-3                   |          DATA          |
+        +-----+--------------------------------------------+------------------------+
+        |                                    ...                                    |
+        +-----+--------------------------------------------+----+----+----+----+----+
+        | 384 |                    DATA                    |    |    |    |    |    |
+        +-----+--------------------------------------------+----+----+----+----+----+
+        """
         self.hash_algorith = hashlib.sha3_256()
-
         self.message_type = message_type    # 3 bytes: REQ, ERR, MSG, FIN, ACK, INF
         self.identifier = identifier        # 4 bytes: int
         self.size = size                    # 4 bytes: int
@@ -31,7 +45,7 @@ class Message:
         data_hash = None
         data = b""
         if size != 0:
-            data_hash, data = struct.unpack(f"12x32s{size}s", binary_data)
+            data_hash, data = struct.unpack(f"!32s{size}s", binary_data[8:])
 
         return Message(message_type.decode("utf-8"), identifier, size, data, data_hash)
 
