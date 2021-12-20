@@ -1,4 +1,6 @@
 import socket
+import struct
+
 from message import Message, RequestMessage, ACKMessage
 
 
@@ -21,7 +23,7 @@ class Client:
             if message.message_type == "FIN":
                 break
             if message.message_type == "INF":
-                self.ack_port = int(message.data)
+                self.ack_port = struct.unpack("i", message.data)[0]
                 print(f'Sending ACKs to: {self.ack_port}')
             elif message.message_type == 'MSG' and message.check_hash():
                 print(f'Received {message.message_type}: {message.identifier}')

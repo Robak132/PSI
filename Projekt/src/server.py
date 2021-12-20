@@ -26,15 +26,25 @@ class CommunicationThread(threading.Thread):
         super().start()
 
     def run(self):
-        while self.message is not None:
-            print(f"Data sent [{self.message_idx}]")
-            message = DataMessage(self.message_idx, self.message).pack()
+        recv_port = self.recv_socket.getsockname()[1]
+        message = InfoMessage(self.message_idx, recv_port).pack()
+        while True:
             self.send_socket.sendto(message, self.address)
-            self.confirm()
+            print(f"INFO sent [{self.message_idx}]")
+            if self.confirm():
+                break
+
+        while self.message is not None:
+            message = DataMessage(self.message_idx, self.message).pack()
+            print(f"Data sent [{self.message_idx}]")
+            self.send_socket.sendto(message, self.address)
+            if self.confirm():
+                self.message = self.steam.get_next_message()
+
         print("Transmission ended", end="")
         self.send_socket.sendto(QuitMessage(1).pack(), self.address)
 
-    def confirm(self):
+    def confirm(self) -> bool:
         try:
             # Waiting for ACK
             binary_data = self.recv_socket.recv(self.buffer_size)
@@ -44,10 +54,10 @@ class CommunicationThread(threading.Thread):
                 print(f"Received ACK: {ACK_id}")
                 if self.message_idx == ACK_id:
                     self.message_idx += 1
-                    self.message = self.steam.get_next_message()
+                    return True
         except socket.timeout:
             # Timeout, I need to send another message
-            return
+            return False
 
 
 class Server:
@@ -66,8 +76,6 @@ class Server:
         stream = self.streams[stream_idx]
 
         self.send_thread = CommunicationThread(stream, address, self.buffer_size)
-        message = InfoMessage(1, str(self.send_thread.recv_socket.getsockname()[1]).encode('utf-8')).pack()
-        self.send_socket.sendto(message, address)
         self.send_thread.join()
 
     def register_stream(self, idx: int, stream: Stream):

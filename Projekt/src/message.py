@@ -51,8 +51,8 @@ class DataMessage(Message):
 
 
 class InfoMessage(Message):
-    def __init__(self, identifier: int, data: bytes):
-        super().__init__("INF", identifier, len(data), data)
+    def __init__(self, identifier: int, port: int):
+        super().__init__("INF", identifier, 4, struct.pack("i", port))
 
 
 class ACKMessage(Message):
