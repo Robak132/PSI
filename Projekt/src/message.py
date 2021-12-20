@@ -45,7 +45,7 @@ class Message:
         data_hash = None
         data = b""
         if size != 0:
-            data_hash, data = struct.unpack(f"!32s{size}s", binary_data[8:])
+            data_hash, data = struct.unpack(f"12x32s{size}s", binary_data)
 
         return Message(message_type.decode("utf-8"), identifier, size, data, data_hash)
 
