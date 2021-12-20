@@ -1,15 +1,17 @@
 import socket
 import struct
 import threading
+import logging
 
 from message import Message, DataMessage, QuitMessage, InfoMessage
 from streams import File, Stream
 
 
 class CommunicationThread(threading.Thread):
-    def __init__(self, stream: Stream, address, buffer_size):
+    def __init__(self, stream: Stream, address, buffer_size, logger):
         super().__init__()
         self.timeout = 1
+        self.logger = logger
 
         self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.send_socket.bind(('', 0))
@@ -30,18 +32,18 @@ class CommunicationThread(threading.Thread):
         message = InfoMessage(self.message_idx, recv_port).pack()
         while True:
             self.send_socket.sendto(message, self.address)
-            print(f"INFO sent [{self.message_idx}]")
+            self.logger.debug(f"INFO sent [{self.message_idx}]")
             if self.confirm():
                 break
 
         while self.message is not None:
             message = DataMessage(self.message_idx, self.message).pack()
-            print(f"Data sent [{self.message_idx}]")
+            self.logger.debug(f"Data sent [{self.message_idx}]")
             self.send_socket.sendto(message, self.address)
             if self.confirm():
                 self.message = self.steam.get_next_message()
 
-        print("Transmission ended", end="")
+        self.logger.info("Transmission ended")
         self.send_socket.sendto(QuitMessage(1).pack(), self.address)
 
     def confirm(self) -> bool:
@@ -51,7 +53,7 @@ class CommunicationThread(threading.Thread):
             message = Message.unpack(binary_data)
             if message.message_type == "ACK":
                 ACK_id = message.identifier
-                print(f"Received ACK: {ACK_id}")
+                self.logger.debug(f"Received ACK: {ACK_id}")
                 if self.message_idx == ACK_id:
                     self.message_idx += 1
                     return True
@@ -62,21 +64,31 @@ class CommunicationThread(threading.Thread):
 
 class Server:
     def __init__(self, buffer_size: int):
+        self.logger = self.setup_loggers()
+
         self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.recv_socket.bind(("127.0.0.1", 8801))
-        self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.send_socket.bind(("127.0.0.1", 8881))
         self.send_thread = None
 
         self.streams = {}
 
         self.buffer_size = buffer_size
 
+    @staticmethod
+    def setup_loggers():
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.INFO)
+        log_format = '%(threadName)12s:%(levelname)8s %(message)s'
+        stderr_handler = logging.StreamHandler()
+        stderr_handler.setFormatter(logging.Formatter(log_format))
+        logger.addHandler(stderr_handler)
+        return logger
+
     def start_transmission(self, stream_idx: int, address):
         stream = self.streams[stream_idx]
         stream.prepare()
 
-        self.send_thread = CommunicationThread(stream, address, self.buffer_size)
+        self.send_thread = CommunicationThread(stream, address, self.buffer_size, self.logger)
         self.send_thread.join()
 
     def register_stream(self, idx: int, stream: Stream):
@@ -84,16 +96,16 @@ class Server:
 
     def start(self):
         while True:
-            print(f"Waiting for client request")
+            self.logger.info(f"Waiting for client request")
             binary_data, address = self.recv_socket.recvfrom(self.buffer_size)
             message = Message.unpack(binary_data)
             if message.message_type == "REQ":
-                print(f"Client request from {address[0]}:{address[1]}")
+                self.logger.info(f"Client request from {address[0]}:{address[1]}, stream idx: {message.identifier}")
                 recv_port = struct.unpack("i", message.data)[0]
                 ip_address = address[0]
 
                 if message.identifier in self.streams.keys():
-                    print(f"Sending stream to {ip_address}:{recv_port}")
+                    self.logger.info(f"Sending stream {message.identifier} to {ip_address}:{recv_port}")
                     self.start_transmission(message.identifier, (ip_address, recv_port))
                 else:
                     print(f"Error: stream doesn't exists.")
