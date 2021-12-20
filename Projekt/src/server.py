@@ -1,50 +1,65 @@
+import queue
 import socket
 import struct
 import threading
 import logging
 
 from message import Message, DataMessage, QuitMessage, InfoMessage
-from streams import File, Stream
+from streams import File, Stream, Ping
 
 
 class CommunicationThread(threading.Thread):
     def __init__(self, stream: Stream, address, buffer_size, logger):
         super().__init__()
-        self.timeout = 1
         self.logger = logger
+
+        self.NEXT_MESSAGE_TIMEOUT = 15  # How much time there is for new message to show up
+        self.ACK_TIMEOUT = 1            # How much time client has for confirmation (ACK)
 
         self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.send_socket.bind(('', 0))
+
         self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.recv_socket.bind(('', 0))
-        self.recv_socket.settimeout(self.timeout)
+        self.recv_socket.settimeout(self.ACK_TIMEOUT)
 
         self.steam = stream
         self.message_idx = 0
-        self.message = self.steam.get_next_message()
         self.address = address
         self.buffer_size = buffer_size
+        self.client_connected = True
 
         super().start()
+
+    def get_next_message(self):
+        try:
+            # I'm trying to get next message
+            data = self.steam.get_next_message(self.NEXT_MESSAGE_TIMEOUT)
+            return DataMessage(self.message_idx, data).pack()
+        except queue.Empty:
+            # There is no available message, I need to keep connection alive
+            return DataMessage(self.message_idx).pack()
 
     def run(self):
         recv_port = self.recv_socket.getsockname()[1]
         message = InfoMessage(self.message_idx, recv_port).pack()
         while True:
             self.send_socket.sendto(message, self.address)
-            self.logger.debug(f"INFO sent [{self.message_idx}]")
+            self.logger.debug(f"INFO sent, idx={self.message_idx}, size={len(message)}")
             if self.confirm():
                 break
 
-        while self.message is not None:
-            message = DataMessage(self.message_idx, self.message).pack()
-            self.logger.debug(f"Data sent [{self.message_idx}]")
+        message = self.get_next_message()
+        while message is not None and self.client_connected:
+            self.logger.debug(f"MSG sent, idx={self.message_idx}, size={len(message)}")
             self.send_socket.sendto(message, self.address)
             if self.confirm():
-                self.message = self.steam.get_next_message()
+                message = self.get_next_message()
 
+        self.steam.close()
         self.logger.info("Transmission ended")
-        self.send_socket.sendto(QuitMessage(1).pack(), self.address)
+        if self.client_connected:
+            self.send_socket.sendto(QuitMessage(1).pack(), self.address)
 
     def confirm(self) -> bool:
         try:
@@ -57,6 +72,10 @@ class CommunicationThread(threading.Thread):
                 if self.message_idx == ACK_id:
                     self.message_idx += 1
                     return True
+            elif message.message_type == "FIN":
+                self.client_connected = False
+                return False
+
         except socket.timeout:
             # Timeout, I need to send another message
             return False
@@ -77,7 +96,7 @@ class Server:
     @staticmethod
     def setup_loggers():
         logger = logging.getLogger(__name__)
-        logger.setLevel(logging.INFO)
+        logger.setLevel(logging.DEBUG)
         log_format = '%(threadName)12s:%(levelname)8s %(message)s'
         stderr_handler = logging.StreamHandler()
         stderr_handler.setFormatter(logging.Formatter(log_format))
@@ -115,4 +134,5 @@ class Server:
 if __name__ == '__main__':
     server = Server(10240)
     server.register_stream(1, File("../resources/file.txt"))
+    server.register_stream(2, Ping(1))
     server.start()

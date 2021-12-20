@@ -46,7 +46,7 @@ class RequestMessage(Message):
 
 
 class DataMessage(Message):
-    def __init__(self, identifier: int, data: bytes):
+    def __init__(self, identifier: int, data=b""):
         super().__init__("MSG", identifier, len(data), data)
 
 
