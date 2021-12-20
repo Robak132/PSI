@@ -74,6 +74,7 @@ class Server:
 
     def start_transmission(self, stream_idx: int, address):
         stream = self.streams[stream_idx]
+        stream.prepare()
 
         self.send_thread = CommunicationThread(stream, address, self.buffer_size)
         self.send_thread.join()
