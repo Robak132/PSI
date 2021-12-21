@@ -1,7 +1,7 @@
 import socket
 import struct
 
-from message import Message, RequestMessage, ACKMessage, QuitMessage
+from src.message import Message, RequestMessage, ACKMessage, QuitMessage, MessageType
 
 
 class Client:
@@ -18,24 +18,24 @@ class Client:
         self.protocol = "IPv4"
 
     def receive(self, messages):
-        full_data = b""
+        result = b""
         pkg_number = 0
         data_pkg_number = 0
         while True:
             binary_data = self.recv_socket.recv(10240)
             message = Message.unpack(binary_data)
-            if message.message_type == "FIN":
+            if message.message_type == MessageType.FIN:
                 break
-            if message.message_type == "INF":
+            if message.message_type == MessageType.INF:
                 self.ack_port = struct.unpack("i", message.data)[0]
                 print(f'Sending ACKs to: {self.ack_port}')
-            elif message.message_type == 'MSG' and message.check_hash():
+            elif message.message_type == MessageType.MSG and message.check_hash():
                 if message.size != 0:
                     print(f'Received {message.message_type}: {message.identifier}')
                     if message.identifier == pkg_number + 1:
                         pkg_number += 1
                         data_pkg_number += 1
-                        full_data += message.data
+                        result += message.data
                 else:
                     print(f'Received MSG (KEEP_ALIVE): {message.identifier}')
                     if message.identifier == pkg_number + 1:
@@ -47,16 +47,16 @@ class Client:
             if data_pkg_number == messages:
                 self.send_socket.sendto(QuitMessage(1).pack(), ("127.0.0.1", self.ack_port))
                 break
-        print(full_data.decode("utf-8"))
+        return result
 
     def send_message(self, message: bytes):
         self.send_socket.sendto(message, ("127.0.0.1", 8801))
 
     def request(self, stream, messages=None):
         self.send_message(RequestMessage(stream, 9902).pack())
-        self.receive(messages)
+        return self.receive(messages)
 
 
 if __name__ == '__main__':
     client = Client()
-    client.request(stream=2, messages=5)
+    print(client.request(stream=1).decode("utf-8"))

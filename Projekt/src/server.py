@@ -4,8 +4,8 @@ import struct
 import threading
 import logging
 
-from message import Message, DataMessage, QuitMessage, InfoMessage
-from streams import File, Stream, Ping
+from src.message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
+from src.streams import File, Stream, Ping
 
 
 class CommunicationThread(threading.Thread):
@@ -35,10 +35,13 @@ class CommunicationThread(threading.Thread):
         try:
             # I'm trying to get next message
             data = self.steam.get_next_message(self.NEXT_MESSAGE_TIMEOUT)
-            return DataMessage(self.message_idx, data).pack()
+            if data is not None:
+                return DataMessage(self.message_idx, data)
+            else:
+                return None
         except queue.Empty:
             # There is no available message, I need to keep connection alive
-            return DataMessage(self.message_idx).pack()
+            return DataMessage(self.message_idx)
 
     def run(self):
         recv_port = self.recv_socket.getsockname()[1]
@@ -51,8 +54,8 @@ class CommunicationThread(threading.Thread):
 
         message = self.get_next_message()
         while message is not None and self.client_connected:
-            self.logger.debug(f"MSG sent, idx={self.message_idx}, size={len(message)}")
-            self.send_socket.sendto(message, self.address)
+            self.logger.debug(f"Sending: {message}")
+            self.send_socket.sendto(message.pack(), self.address)
             if self.confirm():
                 message = self.get_next_message()
 
@@ -66,13 +69,13 @@ class CommunicationThread(threading.Thread):
             # Waiting for ACK
             binary_data = self.recv_socket.recv(self.buffer_size)
             message = Message.unpack(binary_data)
-            if message.message_type == "ACK":
+            if message.message_type == MessageType.ACK:
                 ACK_id = message.identifier
-                self.logger.debug(f"Received ACK: {ACK_id}")
+                self.logger.debug(f"Received: {message}")
                 if self.message_idx == ACK_id:
                     self.message_idx += 1
                     return True
-            elif message.message_type == "FIN":
+            elif message.message_type == MessageType.FIN:
                 self.client_connected = False
                 return False
 
@@ -113,12 +116,13 @@ class Server:
     def register_stream(self, idx: int, stream: Stream):
         self.streams[idx] = stream
 
-    def start(self):
-        while True:
+    def start(self, max_connections):
+        connections = 0
+        while connections != max_connections:
             self.logger.info(f"Waiting for client request")
             binary_data, address = self.recv_socket.recvfrom(self.buffer_size)
             message = Message.unpack(binary_data)
-            if message.message_type == "REQ":
+            if message.message_type == MessageType.REQ:
                 self.logger.info(f"Client request from {address[0]}:{address[1]}, stream idx: {message.identifier}")
                 recv_port = struct.unpack("i", message.data)[0]
                 ip_address = address[0]
@@ -129,6 +133,7 @@ class Server:
                 else:
                     print(f"Error: stream doesn't exists.")
                     # TODO Send this error to client
+            connections += 1
 
 
 if __name__ == '__main__':
