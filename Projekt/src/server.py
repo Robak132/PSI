@@ -22,6 +22,7 @@ class CommunicationThread(threading.Thread):
         self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.recv_socket.bind(('', 0))
         self.recv_socket.settimeout(self.ACK_TIMEOUT)
+        self.recv_port = self.recv_socket.getsockname()[1]
 
         self.steam = stream
         self.message_idx = 0
@@ -44,8 +45,7 @@ class CommunicationThread(threading.Thread):
             return DataMessage(self.message_idx)
 
     def run(self):
-        recv_port = self.recv_socket.getsockname()[1]
-        message = InfoMessage(self.message_idx, recv_port).pack()
+        message = InfoMessage(self.message_idx, self.recv_port).pack()
         while True:
             self.send_socket.sendto(message, self.address)
             self.logger.debug(f"INFO sent, idx={self.message_idx}, size={len(message)}")
@@ -85,11 +85,15 @@ class CommunicationThread(threading.Thread):
 
 
 class Server:
-    def __init__(self, buffer_size: int):
+    def __init__(self, address=None, buffer_size=10240):
         self.logger = self.setup_loggers()
 
         self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.recv_socket.bind(("127.0.0.1", 8801))
+        if address is None:
+            self.recv_socket.bind(("", 0))
+        else:
+            self.recv_socket.bind(address)
+
         self.send_thread = None
 
         self.streams = {}
@@ -116,7 +120,7 @@ class Server:
     def register_stream(self, idx: int, stream: Stream):
         self.streams[idx] = stream
 
-    def start(self, max_connections):
+    def start(self, max_connections=None):
         connections = 0
         while connections != max_connections:
             self.logger.info(f"Waiting for client request")
@@ -137,7 +141,7 @@ class Server:
 
 
 if __name__ == '__main__':
-    server = Server(10240)
+    server = Server(("127.0.0.1", 8801))
     server.register_stream(1, File("../resources/file.txt"))
     server.register_stream(2, Ping(1))
     server.start()

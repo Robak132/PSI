@@ -1,5 +1,6 @@
 import socket
 import struct
+from typing import Tuple
 
 from src.message import Message, RequestMessage, ACKMessage, QuitMessage, MessageType
 
@@ -9,15 +10,16 @@ class Client:
         self.SERVER_NOT_RESPONDING_TIMEOUT = 60  # After this time client will close connection
 
         self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.recv_socket.bind(("", 9902))
+        self.recv_socket.bind(("", 0))
         self.recv_socket.settimeout(self.SERVER_NOT_RESPONDING_TIMEOUT)
+        self.recv_port = self.recv_socket.getsockname()[1]
 
         self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.send_socket.bind(("", 9992))
+        self.send_socket.bind(("", 0))
         self.ack_port = None
         self.protocol = "IPv4"
 
-    def receive(self, messages):
+    def receive(self, target_ip, messages):
         result = b""
         pkg_number = 0
         data_pkg_number = 0
@@ -43,20 +45,21 @@ class Client:
 
             if self.ack_port is not None:
                 print(f"Sending ACK: {pkg_number}")
-                self.send_socket.sendto(ACKMessage(pkg_number).pack(), ("127.0.0.1", self.ack_port))
+                self.send_message(ACKMessage(pkg_number), (target_ip, self.ack_port))
             if data_pkg_number == messages:
-                self.send_socket.sendto(QuitMessage(1).pack(), ("127.0.0.1", self.ack_port))
+                self.send_message(QuitMessage(1), (target_ip, self.ack_port))
                 break
         return result
 
-    def send_message(self, message: bytes):
-        self.send_socket.sendto(message, ("127.0.0.1", 8801))
+    def send_message(self, message: Message, target: Tuple[str, int]):
+        self.send_socket.sendto(message.pack(), target)
 
-    def request(self, stream, messages=None):
-        self.send_message(RequestMessage(stream, 9902).pack())
-        return self.receive(messages)
+    def request(self, stream, target, messages=None):
+        self.send_message(RequestMessage(stream, self.recv_port), target)
+        return self.receive(target[0], messages)
 
 
 if __name__ == '__main__':
     client = Client()
-    print(client.request(stream=1).decode("utf-8"))
+    data = client.request(stream=1, target=("127.0.0.1", 8801))
+    print(data.decode("utf-8"))
