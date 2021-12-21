@@ -1,6 +1,9 @@
+import errno
 import queue
+import signal
 import socket
 import struct
+import sys
 import threading
 import logging
 
@@ -86,9 +89,11 @@ class CommunicationThread(threading.Thread):
 
 class Server:
     def __init__(self, address=None, buffer_size=10240):
+
         self.logger = self.setup_loggers()
 
         self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.recv_socket.settimeout(1)
         if address is None:
             self.recv_socket.bind(("", 0))
         else:
@@ -99,6 +104,15 @@ class Server:
         self.streams = {}
 
         self.buffer_size = buffer_size
+        self.is_running = True
+        self.setup_exit_handler()
+
+    def setup_exit_handler(self):
+        signal.signal(signal.SIGINT, lambda sig, frame: self.stop())
+
+    def stop(self):
+        self.logger.info("Closing")
+        self.is_running = False
 
     @staticmethod
     def setup_loggers():
@@ -120,24 +134,24 @@ class Server:
     def register_stream(self, idx: int, stream: Stream):
         self.streams[idx] = stream
 
-    def start(self, max_connections=None):
-        connections = 0
-        while connections != max_connections:
-            self.logger.info(f"Waiting for client request")
-            binary_data, address = self.recv_socket.recvfrom(self.buffer_size)
-            message = Message.unpack(binary_data)
-            if message.message_type == MessageType.REQ:
-                self.logger.info(f"Client request from {address[0]}:{address[1]}, stream idx: {message.identifier}")
-                recv_port = struct.unpack("i", message.data)[0]
-                ip_address = address[0]
+    def start(self):
+        while self.is_running:
+            try:
+                binary_data, address = self.recv_socket.recvfrom(self.buffer_size)
+                message = Message.unpack(binary_data)
+                if message.message_type == MessageType.REQ:
+                    self.logger.info(f"Client request from {address[0]}:{address[1]}, stream idx: {message.identifier}")
+                    recv_port = struct.unpack("i", message.data)[0]
+                    ip_address = address[0]
 
-                if message.identifier in self.streams.keys():
-                    self.logger.info(f"Sending stream {message.identifier} to {ip_address}:{recv_port}")
-                    self.start_transmission(message.identifier, (ip_address, recv_port))
-                else:
-                    print(f"Error: stream doesn't exists.")
-                    # TODO Send this error to client
-            connections += 1
+                    if message.identifier in self.streams.keys():
+                        self.logger.info(f"Sending stream {message.identifier} to {ip_address}:{recv_port}")
+                        self.start_transmission(message.identifier, (ip_address, recv_port))
+                    else:
+                        print(f"Error: stream doesn't exists.")
+                        # TODO Send this error to client
+            except socket.timeout:
+                continue
 
 
 if __name__ == '__main__':
