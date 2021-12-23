@@ -63,8 +63,8 @@ class CommunicationThread(threading.Thread):
                 break
 
         message = self.get_next_message()
-        while self.stopped() and message is not None and self.client_connected:
-            self.logger.debug(f"Sending: {message}")
+        while not self.stopped() and message is not None and self.client_connected:
+            self.logger.debug(f"Send: {message}")
             self.send_socket.sendto(message.pack(), self.address)
             if self.confirm():
                 message = self.get_next_message()
@@ -81,7 +81,7 @@ class CommunicationThread(threading.Thread):
             message = Message.unpack(binary_data)
             if message.message_type == MessageType.ACK:
                 ACK_id = message.identifier
-                self.logger.debug(f"Received: {message}")
+                self.logger.debug(f"Recv: {message}")
                 if self.message_idx == ACK_id:
                     self.message_idx += 1
                     return True
