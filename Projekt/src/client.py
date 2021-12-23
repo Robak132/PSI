@@ -61,5 +61,5 @@ class Client:
 
 if __name__ == '__main__':
     client = Client()
-    data = client.request(stream=1, target=("127.0.0.1", 8801))
+    data = client.request(stream=2, target=("127.0.0.1", 8801))
     print(data.decode("utf-8"))

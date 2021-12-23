@@ -33,7 +33,14 @@ class CommunicationThread(threading.Thread):
         self.buffer_size = buffer_size
         self.client_connected = True
 
+        self.stop_event = threading.Event()
         super().start()
+
+    def stop(self):
+        self.stop_event.set()
+
+    def stopped(self):
+        return self.stop_event.is_set()
 
     def get_next_message(self):
         try:
@@ -49,14 +56,14 @@ class CommunicationThread(threading.Thread):
 
     def run(self):
         message = InfoMessage(self.message_idx, self.recv_port).pack()
-        while True:
+        while not self.stopped():
             self.send_socket.sendto(message, self.address)
             self.logger.debug(f"INFO sent, idx={self.message_idx}, size={len(message)}")
             if self.confirm():
                 break
 
         message = self.get_next_message()
-        while message is not None and self.client_connected:
+        while self.stopped() and message is not None and self.client_connected:
             self.logger.debug(f"Sending: {message}")
             self.send_socket.sendto(message.pack(), self.address)
             if self.confirm():
@@ -99,8 +106,7 @@ class Server:
         else:
             self.recv_socket.bind(address)
 
-        self.send_thread = None
-
+        self.threads = []
         self.streams = {}
 
         self.buffer_size = buffer_size
@@ -112,6 +118,8 @@ class Server:
 
     def stop(self):
         self.logger.info("Closing")
+        for thread in self.threads:
+            thread.stop()
         self.is_running = False
 
     @staticmethod
@@ -128,8 +136,7 @@ class Server:
         stream = self.streams[stream_idx]
         stream.prepare()
 
-        self.send_thread = CommunicationThread(stream, address, self.buffer_size, self.logger)
-        self.send_thread.join()
+        self.threads.append(CommunicationThread(stream, address, self.buffer_size, self.logger))
 
     def register_stream(self, idx: int, stream: Stream):
         self.streams[idx] = stream
