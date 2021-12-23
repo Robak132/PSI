@@ -94,55 +94,28 @@ class CommunicationThread(threading.Thread):
             return False
 
 
-class Server:
-    def __init__(self, address=None, buffer_size=10240):
+class MainThread(threading.Thread):
+    def __init__(self, streams, recv_socket, buffer_size, logger):
+        super().__init__()
+        self.logger = logger
 
-        self.logger = self.setup_loggers()
-
-        self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.recv_socket.settimeout(1)
-        if address is None:
-            self.recv_socket.bind(("", 0))
-        else:
-            self.recv_socket.bind(address)
-
-        self.threads = []
-        self.streams = {}
-
+        self.recv_socket = recv_socket
         self.buffer_size = buffer_size
-        self.is_running = True
-        self.setup_exit_handler()
 
-    def setup_exit_handler(self):
-        signal.signal(signal.SIGINT, lambda sig, frame: self.stop())
+        self.streams = streams
+        self.threads = []
+
+        self.stop_event = threading.Event()
+        super().start()
 
     def stop(self):
-        self.logger.info("Closing")
-        for thread in self.threads:
-            thread.stop()
-        self.is_running = False
+        self.stop_event.set()
 
-    @staticmethod
-    def setup_loggers():
-        logger = logging.getLogger(__name__)
-        logger.setLevel(logging.DEBUG)
-        log_format = '%(threadName)12s:%(levelname)8s %(message)s'
-        stderr_handler = logging.StreamHandler()
-        stderr_handler.setFormatter(logging.Formatter(log_format))
-        logger.addHandler(stderr_handler)
-        return logger
+    def stopped(self):
+        return self.stop_event.is_set()
 
-    def start_transmission(self, stream_idx: int, address):
-        stream = self.streams[stream_idx]
-        stream.prepare()
-
-        self.threads.append(CommunicationThread(stream, address, self.buffer_size, self.logger))
-
-    def register_stream(self, idx: int, stream: Stream):
-        self.streams[idx] = stream
-
-    def start(self):
-        while self.is_running:
+    def run(self):
+        while not self.stopped():
             try:
                 binary_data, address = self.recv_socket.recvfrom(self.buffer_size)
                 message = Message.unpack(binary_data)
@@ -160,9 +133,56 @@ class Server:
             except socket.timeout:
                 continue
 
+        self.logger.info("Closing")
+        for thread in self.threads:
+            thread.stop()
+
+    def start_transmission(self, stream_idx: int, address):
+        stream = self.streams[stream_idx]
+        stream.prepare()
+
+        self.threads.append(CommunicationThread(stream, address, self.buffer_size, self.logger))
+
+
+class Server:
+    def __init__(self, address=None, buffer_size=10240):
+        self.logger = self.setup_loggers()
+
+        self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.recv_socket.settimeout(1)
+        if address is None:
+            self.recv_socket.bind(("", 0))
+        else:
+            self.recv_socket.bind(address)
+
+        self.streams = {}
+
+        self.buffer_size = buffer_size
+        self.setup_exit_handler()
+
+        self.main_thread = MainThread(self.streams, self.recv_socket, buffer_size, self.logger)
+
+    def setup_exit_handler(self):
+        signal.signal(signal.SIGINT, lambda sig, frame: self.stop())
+
+    def stop(self):
+        self.main_thread.stop()
+
+    @staticmethod
+    def setup_loggers():
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+        log_format = '%(threadName)12s:%(levelname)8s %(message)s'
+        stderr_handler = logging.StreamHandler()
+        stderr_handler.setFormatter(logging.Formatter(log_format))
+        logger.addHandler(stderr_handler)
+        return logger
+
+    def register_stream(self, idx: int, stream: Stream):
+        self.streams[idx] = stream
+
 
 if __name__ == '__main__':
     server = Server(("127.0.0.1", 8801))
     server.register_stream(1, File("../resources/file.txt"))
     server.register_stream(2, Ping(1))
-    server.start()
