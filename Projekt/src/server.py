@@ -93,9 +93,9 @@ class CommunicationThread(threading.Thread):
 
 
 class Server(threading.Thread):
-    def __init__(self, address, buffer_size=10240):
+    def __init__(self, address, logging_level: int = logging.INFO, buffer_size=10240):
         super().__init__()
-        self.logger = self.setup_loggers()
+        self.logger = self.setup_loggers(logging_level)
         self.stop_event = threading.Event()
         self.setup_exit_handler()
 
@@ -111,9 +111,9 @@ class Server(threading.Thread):
         self.threads = []
 
     @staticmethod
-    def setup_loggers():
+    def setup_loggers(logging_level: int):
         logger = logging.getLogger(__name__)
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(logging_level)
         log_format = '%(threadName)12s:%(levelname)8s %(message)s'
         stderr_handler = logging.StreamHandler()
         stderr_handler.setFormatter(logging.Formatter(log_format))
@@ -164,7 +164,6 @@ class Server(threading.Thread):
 
 if __name__ == '__main__':
     server = Server(("127.0.0.1", 8801))
-
     server.register_stream(1, File("../resources/file.txt"))
     server.register_stream(2, Ping(1))
     server.start()
