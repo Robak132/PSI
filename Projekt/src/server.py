@@ -1,9 +1,7 @@
-import errno
 import queue
 import signal
 import socket
 import struct
-import sys
 import threading
 import logging
 
@@ -94,22 +92,42 @@ class CommunicationThread(threading.Thread):
             return False
 
 
-class MainThread(threading.Thread):
-    def __init__(self, streams, recv_socket, buffer_size, logger):
+class Server(threading.Thread):
+    def __init__(self, address, buffer_size=10240):
         super().__init__()
-        self.logger = logger
+        self.logger = self.setup_loggers()
+        self.stop_event = threading.Event()
+        self.setup_exit_handler()
 
-        self.recv_socket = recv_socket
+        self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.recv_socket.settimeout(1)
+        if address is None:
+            self.recv_socket.bind(("", 0))
+        else:
+            self.recv_socket.bind(address)
+
         self.buffer_size = buffer_size
-
-        self.streams = streams
+        self.streams = {}
         self.threads = []
 
-        self.stop_event = threading.Event()
-        super().start()
+    @staticmethod
+    def setup_loggers():
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+        log_format = '%(threadName)12s:%(levelname)8s %(message)s'
+        stderr_handler = logging.StreamHandler()
+        stderr_handler.setFormatter(logging.Formatter(log_format))
+        logger.addHandler(stderr_handler)
+        return logger
+
+    def register_stream(self, idx: int, stream: Stream):
+        self.streams[idx] = stream
 
     def stop(self):
         self.stop_event.set()
+
+    def setup_exit_handler(self):
+        signal.signal(signal.SIGINT, lambda sig, frame: self.stop())
 
     def stopped(self):
         return self.stop_event.is_set()
@@ -144,45 +162,9 @@ class MainThread(threading.Thread):
         self.threads.append(CommunicationThread(stream, address, self.buffer_size, self.logger))
 
 
-class Server:
-    def __init__(self, address=None, buffer_size=10240):
-        self.logger = self.setup_loggers()
-
-        self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.recv_socket.settimeout(1)
-        if address is None:
-            self.recv_socket.bind(("", 0))
-        else:
-            self.recv_socket.bind(address)
-
-        self.streams = {}
-
-        self.buffer_size = buffer_size
-        self.setup_exit_handler()
-
-        self.main_thread = MainThread(self.streams, self.recv_socket, buffer_size, self.logger)
-
-    def setup_exit_handler(self):
-        signal.signal(signal.SIGINT, lambda sig, frame: self.stop())
-
-    def stop(self):
-        self.main_thread.stop()
-
-    @staticmethod
-    def setup_loggers():
-        logger = logging.getLogger(__name__)
-        logger.setLevel(logging.DEBUG)
-        log_format = '%(threadName)12s:%(levelname)8s %(message)s'
-        stderr_handler = logging.StreamHandler()
-        stderr_handler.setFormatter(logging.Formatter(log_format))
-        logger.addHandler(stderr_handler)
-        return logger
-
-    def register_stream(self, idx: int, stream: Stream):
-        self.streams[idx] = stream
-
-
 if __name__ == '__main__':
     server = Server(("127.0.0.1", 8801))
+
     server.register_stream(1, File("../resources/file.txt"))
     server.register_stream(2, Ping(1))
+    server.start()

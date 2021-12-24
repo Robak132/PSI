@@ -9,6 +9,7 @@ class TestServerClientConnection:
     def test_client_server(self):
         server = Server(("127.0.0.1", 8888))
         server.register_stream(1, File("tests/resources/test_file.txt"))
+        server.start()
 
         client = Client()
         data = client.request(1, ("127.0.0.1", 8888))
