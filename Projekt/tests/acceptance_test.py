@@ -1,8 +1,8 @@
 import threading
 
-from src.streams import File
-from src.server import Server
-from src.client import Client
+from streams import File
+from server import Server
+from client import Client
 
 
 class TestServerClientConnection:

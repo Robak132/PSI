@@ -1,4 +1,4 @@
-from src.streams import File
+from streams import File
 
 
 class TestDataProvider:

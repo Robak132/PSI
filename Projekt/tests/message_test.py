@@ -1,4 +1,4 @@
-from src.message import DataMessage, Message, ACKMessage, MessageType
+from message import DataMessage, Message, ACKMessage, MessageType
 
 
 class TestMessage:

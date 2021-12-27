@@ -5,8 +5,8 @@ import struct
 import threading
 import logging
 
-from src.message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
-from src.streams import File, Stream, Ping
+from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
+from streams import File, Stream, Ping
 
 
 class CommunicationThread(threading.Thread):
@@ -105,6 +105,8 @@ class Server(threading.Thread):
             self.recv_socket.bind(("", 0))
         else:
             self.recv_socket.bind(address)
+        self.recv_address = self.recv_socket.getsockname()
+        self.logger.info(f"Server bound on: {self.recv_address}")
 
         self.buffer_size = buffer_size
         self.streams = {}
@@ -151,10 +153,6 @@ class Server(threading.Thread):
             except socket.timeout:
                 continue
 
-        self.logger.info("Closing")
-        for thread in self.threads:
-            thread.stop()
-
     def start_transmission(self, stream_idx: int, address):
         stream = self.streams[stream_idx]
         stream.prepare()
@@ -164,6 +162,6 @@ class Server(threading.Thread):
 
 if __name__ == '__main__':
     server = Server(("127.0.0.1", 8801))
-    server.register_stream(1, File("../resources/file.txt"))
+    server.register_stream(1, File("resources/file.txt"))
     server.register_stream(2, Ping(1))
     server.start()

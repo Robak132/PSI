@@ -2,7 +2,7 @@ import socket
 import struct
 from typing import Tuple
 
-from src.message import Message, RequestMessage, ACKMessage, QuitMessage, MessageType
+from message import Message, RequestMessage, ACKMessage, QuitMessage, MessageType
 
 
 class Client:
