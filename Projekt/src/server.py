@@ -186,14 +186,14 @@ class Server:
 
                 if message.identifier in self.streams.keys():
                     self.logger.info(f"Sending stream {message.identifier} to {ip_address}:{recv_port}")
-                    self.start_transmission(message.identifier, (ip_address, recv_port))
+                    self.create_new_thread(message.identifier, (ip_address, recv_port))
                 else:
-                    print(f"Error: stream doesn't exists.")
+                    self.logger.error(f"Error: stream doesn't exists.")
                     # TODO Send this error to client
         except socket.timeout:
             return
 
-    def start_transmission(self, stream_idx: int, address):
+    def create_new_thread(self, stream_idx: int, address):
         stream = self.streams[stream_idx]
         stream.prepare()
 
