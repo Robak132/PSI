@@ -4,6 +4,7 @@ import socket
 import struct
 import threading
 import logging
+from typing import Tuple
 
 from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
 from streams import File, Stream, Ping
@@ -56,24 +57,26 @@ class CommunicationThread(threading.Thread):
             return DataMessage(self.message_idx)
 
     def run(self):
-        message = InfoMessage(self.message_idx, self.recv_port).pack()
+        message = InfoMessage(self.message_idx, self.recv_port)
         while not self.stopped():
-            self.send_socket.sendto(message, self.address)
-            self.logger.debug(f"INFO sent, idx={self.message_idx}, size={len(message)}")
+            self.send_message(message, self.address)
             if self.confirm():
                 break
 
         message = self.get_next_message()
         while not self.stopped() and message is not None and self.client_connected:
-            self.logger.debug(f"Send: {message}")
-            self.send_socket.sendto(message.pack(), self.address)
+            self.send_message(message, self.address)
             if self.confirm():
                 message = self.get_next_message()
 
         self.steam.close()
         self.logger.info("Transmission ended")
         if self.client_connected:
-            self.send_socket.sendto(QuitMessage(1).pack(), self.address)
+            self.send_message(QuitMessage(1), self.address)
+
+    def send_message(self, message: Message, address: Tuple[str, int]):
+        self.logger.debug(f"Send: {message}")
+        self.send_socket.sendto(message.pack(), address)
 
     def confirm(self) -> bool:
         try:
