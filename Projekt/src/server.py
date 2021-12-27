@@ -14,6 +14,9 @@ class CommunicationThread(threading.Thread):
         super().__init__()
         self.logger = logger
 
+        self.CLIENT_NOT_RESPONDING_TIMEOUT = 30  # After this time server will close connection
+        self.client_lag = 0
+
         self.NEXT_MESSAGE_TIMEOUT = 15  # How much time there is for new message to show up
         self.ACK_TIMEOUT = 1            # How much time client has for confirmation (ACK)
 
@@ -84,11 +87,16 @@ class CommunicationThread(threading.Thread):
                     self.message_idx += 1
                     return True
             elif message.message_type == MessageType.FIN:
+                self.logger.info("Client closed connection")
                 self.client_connected = False
                 return False
 
         except socket.timeout:
             # Timeout, I need to send another message
+            self.client_lag += self.ACK_TIMEOUT
+            if self.client_lag >= self.CLIENT_NOT_RESPONDING_TIMEOUT:
+                self.logger.info("Client not responding: timeout")
+                self.client_connected = False
             return False
 
 
@@ -161,7 +169,7 @@ class Server(threading.Thread):
 
 
 if __name__ == '__main__':
-    server = Server(("127.0.0.1", 8801))
+    server = Server(("127.0.0.1", 8801), logging_level=logging.DEBUG)
     server.register_stream(1, File("resources/file.txt"))
     server.register_stream(2, Ping(1))
     server.start()
