@@ -101,7 +101,33 @@ class CommunicationThread(threading.Thread):
             return False
 
 
-class Server(threading.Thread):
+class StoppableThread(threading.Thread):
+    """
+    Thread class with a stop() method. The thread itself has to check
+    regularly for the stopped() condition.
+
+    Based on: https://stackoverflow.com/questions/47912701/python-how-can-i-implement-a-stoppable-thread
+    """
+
+    def __init__(self, task):
+        super().__init__()
+        self._stop_event = threading.Event()
+        self.task = task
+
+        self.start()
+
+    def stop(self):
+        self._stop_event.set()
+
+    def stopped(self):
+        return self._stop_event.is_set()
+
+    def run(self):
+        while not self.stopped():
+            self.task()
+
+
+class Server:
     def __init__(self, address, logging_level: int = logging.INFO, buffer_size=448):
         super().__init__()
         self.logger = self.setup_loggers(logging_level)
@@ -135,32 +161,37 @@ class Server(threading.Thread):
         self.streams[idx] = stream
 
     def stop(self):
-        self.stop_event.set()
+        for thread in self.threads:
+            thread.stop()
 
     def setup_exit_handler(self):
         signal.signal(signal.SIGINT, lambda sig, frame: self.stop())
 
-    def stopped(self):
-        return self.stop_event.is_set()
+    def start(self, thread=True):
+        if thread:
+            thread = StoppableThread(self.receive)
+            self.threads.append(thread)
+        else:
+            while True:
+                self.receive()
 
-    def run(self):
-        while not self.stopped():
-            try:
-                binary_data, address = self.recv_socket.recvfrom(self.buffer_size)
-                message = Message.unpack(binary_data)
-                if message.message_type == MessageType.REQ:
-                    self.logger.info(f"Client request from {address[0]}:{address[1]}, stream idx: {message.identifier}")
-                    recv_port = struct.unpack("i", message.data)[0]
-                    ip_address = address[0]
+    def receive(self):
+        try:
+            binary_data, address = self.recv_socket.recvfrom(self.buffer_size)
+            message = Message.unpack(binary_data)
+            if message.message_type == MessageType.REQ:
+                self.logger.info(f"Client request from {address[0]}:{address[1]}, stream idx: {message.identifier}")
+                recv_port = struct.unpack("i", message.data)[0]
+                ip_address = address[0]
 
-                    if message.identifier in self.streams.keys():
-                        self.logger.info(f"Sending stream {message.identifier} to {ip_address}:{recv_port}")
-                        self.start_transmission(message.identifier, (ip_address, recv_port))
-                    else:
-                        print(f"Error: stream doesn't exists.")
-                        # TODO Send this error to client
-            except socket.timeout:
-                continue
+                if message.identifier in self.streams.keys():
+                    self.logger.info(f"Sending stream {message.identifier} to {ip_address}:{recv_port}")
+                    self.start_transmission(message.identifier, (ip_address, recv_port))
+                else:
+                    print(f"Error: stream doesn't exists.")
+                    # TODO Send this error to client
+        except socket.timeout:
+            return
 
     def start_transmission(self, stream_idx: int, address):
         stream = self.streams[stream_idx]
@@ -173,4 +204,4 @@ if __name__ == '__main__':
     server = Server(("127.0.0.1", 8801), logging_level=logging.DEBUG)
     server.register_stream(1, File("resources/file.txt"))
     server.register_stream(2, Ping(1))
-    server.start()
+    server.start(thread=False)
