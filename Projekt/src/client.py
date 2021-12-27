@@ -24,7 +24,7 @@ class Client:
         pkg_number = 0
         data_pkg_number = 0
         while True:
-            binary_data = self.recv_socket.recv(10240)
+            binary_data = self.recv_socket.recv(448)
             message = Message.unpack(binary_data)
             if message.message_type == MessageType.FIN:
                 break
@@ -61,5 +61,5 @@ class Client:
 
 if __name__ == '__main__':
     client = Client()
-    data = client.request(stream=2, target=("127.0.0.1", 8801))
+    data = client.request(stream=1, target=("127.0.0.1", 8801))
     print(data.decode("utf-8"))

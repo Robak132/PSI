@@ -93,6 +93,7 @@ class CommunicationThread(threading.Thread):
 
         except socket.timeout:
             # Timeout, I need to send another message
+            # FIXME: Zrobić lepiej
             self.client_lag += self.ACK_TIMEOUT
             if self.client_lag >= self.CLIENT_NOT_RESPONDING_TIMEOUT:
                 self.logger.info("Client not responding: timeout")
@@ -101,7 +102,7 @@ class CommunicationThread(threading.Thread):
 
 
 class Server(threading.Thread):
-    def __init__(self, address, logging_level: int = logging.INFO, buffer_size=10240):
+    def __init__(self, address, logging_level: int = logging.INFO, buffer_size=448):
         super().__init__()
         self.logger = self.setup_loggers(logging_level)
         self.stop_event = threading.Event()
