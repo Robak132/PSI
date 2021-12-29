@@ -7,10 +7,10 @@ import logging
 from typing import Tuple
 from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
 from streams import File, Stream, Ping
-
+from netaddr import IPAddress
 
 class CommunicationThread(threading.Thread):
-    def __init__(self, stream: Stream, address, buffer_size, logger):
+    def __init__(self, stream: Stream, address, buffer_size, logger, server_addr = ('::', 0), interface = ''):
         super().__init__()
         self.logger = logger
 
@@ -20,13 +20,24 @@ class CommunicationThread(threading.Thread):
         self.NEXT_MESSAGE_TIMEOUT = 15  # How much time there is for new message to show up
         self.ACK_TIMEOUT = 1            # How much time client has for confirmation (ACK)
 
+        server_addr = (str(IPAddress(server_addr[0]).ipv6()), 0)
+        if interface is not None and interface != '':
+            server_addr = (server_addr[0] + f'%{interface}', server_addr[1])
+
         self.send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         self.send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        self.send_socket.bind(('::', 0))
+
+        for ainfo in socket.getaddrinfo(server_addr[0], server_addr[1]):
+            if ainfo[0].name == 'AF_INET6' and ainfo[1].name == 'SOCK_DGRAM':
+                server_addr = ainfo[4]
+                break
+
+        self.logger.debug(f'processed server_addr: {server_addr}')
+        self.send_socket.bind(server_addr)
 
         self.recv_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         self.recv_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        self.recv_socket.bind(('::', 0))
+        self.recv_socket.bind(server_addr)
         self.recv_socket.settimeout(self.ACK_TIMEOUT)
         self.recv_port = self.recv_socket.getsockname()[1]
 
@@ -140,9 +151,22 @@ class Server:
         self.recv_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         self.recv_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
         self.recv_socket.settimeout(1)
+
+        self.interface = 'ens33' if False else ''
+
         if address is None:
             self.recv_socket.bind(("::", 0))
         else:
+            address = (str(IPAddress(address[0]).ipv6()), address[1])
+            if self.interface is not None and self.interface != '':
+                address = (address[0] + f'%{self.interface}', address[1])
+
+            for ainfo in socket.getaddrinfo(address[0], address[1]):
+                if ainfo[0].name == 'AF_INET6' and ainfo[1].name == 'SOCK_DGRAM':
+                    address = ainfo[4]
+                    break
+
+            self.logger.debug(f'processed address: {address}')
             self.recv_socket.bind(address)
         self.recv_address = self.recv_socket.getsockname()
         self.logger.info(f"Server bound on: {self.recv_address}")
@@ -203,11 +227,11 @@ class Server:
         stream = self.streams[stream_idx]
         stream.prepare()
 
-        self.threads.append(CommunicationThread(stream, address, self.buffer_size, self.logger))
+        self.threads.append(CommunicationThread(stream, address, self.buffer_size, self.logger, self.recv_address, self.interface))
 
 
 if __name__ == '__main__':
-    server = Server(("::", 8801), logging_level=logging.DEBUG)
+    server = Server(('127.0.0.1', 8801), logging_level=logging.INFO)
     server.register_stream(1, File("resources/file.txt"))
     server.register_stream(2, Ping(1))
     server.start(thread=False)

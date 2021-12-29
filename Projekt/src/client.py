@@ -1,7 +1,7 @@
 import socket
 import struct
 from typing import Tuple
-
+from netaddr.ip import IPAddress
 from message import Message, RequestMessage, ACKMessage, QuitMessage, MessageType
 
 
@@ -9,15 +9,16 @@ class Client:
     def __init__(self):
         self.SERVER_NOT_RESPONDING_TIMEOUT = 60  # After this time client will close connection
 
-        self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.recv_socket.bind(("", 0))
+        self.recv_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.recv_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+        self.recv_socket.bind(("::", 0))
         self.recv_socket.settimeout(self.SERVER_NOT_RESPONDING_TIMEOUT)
         self.recv_port = self.recv_socket.getsockname()[1]
 
-        self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.send_socket.bind(("", 0))
+        self.send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+        self.send_socket.bind(("::", 0))
         self.ack_port = None
-        self.protocol = "IPv4"
 
     def receive(self, target_ip, messages):
         result = b""
@@ -55,6 +56,7 @@ class Client:
         self.send_socket.sendto(message.pack(), target)
 
     def request(self, stream, target, messages=None):
+        target = (str(IPAddress(target[0]).ipv6()), target[1])
         self.send_message(RequestMessage(stream, self.recv_port), target)
         return self.receive(target[0], messages)
 
