@@ -5,7 +5,6 @@ import struct
 import threading
 import logging
 from typing import Tuple
-
 from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
 from streams import File, Stream, Ping
 
@@ -131,10 +130,9 @@ class StoppableThread(threading.Thread):
 
 
 class Server:
-    def __init__(self, address, logging_level: int = logging.INFO, buffer_size=448):
+    def __init__(self, address=None, logging_level: int = logging.INFO, buffer_size=448):
         super().__init__()
         self.logger = self.setup_loggers(logging_level)
-        self.stop_event = threading.Event()
         self.setup_exit_handler()
 
         self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -146,6 +144,7 @@ class Server:
         self.recv_address = self.recv_socket.getsockname()
         self.logger.info(f"Server bound on: {self.recv_address}")
 
+        self.running = True
         self.buffer_size = buffer_size
         self.streams = {}
         self.threads = []
@@ -164,6 +163,7 @@ class Server:
         self.streams[idx] = stream
 
     def stop(self):
+        self.running = False
         for thread in self.threads:
             thread.stop()
 
@@ -175,7 +175,7 @@ class Server:
             thread = StoppableThread(self.receive)
             self.threads.append(thread)
         else:
-            while True:
+            while self.running:
                 self.receive()
 
     def receive(self):
