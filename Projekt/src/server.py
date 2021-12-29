@@ -20,11 +20,13 @@ class CommunicationThread(threading.Thread):
         self.NEXT_MESSAGE_TIMEOUT = 15  # How much time there is for new message to show up
         self.ACK_TIMEOUT = 1            # How much time client has for confirmation (ACK)
 
-        self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.send_socket.bind(('', 0))
+        self.send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+        self.send_socket.bind(('::', 0))
 
-        self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.recv_socket.bind(('', 0))
+        self.recv_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.recv_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+        self.recv_socket.bind(('::', 0))
         self.recv_socket.settimeout(self.ACK_TIMEOUT)
         self.recv_port = self.recv_socket.getsockname()[1]
 
@@ -135,10 +137,11 @@ class Server:
         self.logger = self.setup_loggers(logging_level)
         self.setup_exit_handler()
 
-        self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.recv_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.recv_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
         self.recv_socket.settimeout(1)
         if address is None:
-            self.recv_socket.bind(("", 0))
+            self.recv_socket.bind(("::", 0))
         else:
             self.recv_socket.bind(address)
         self.recv_address = self.recv_socket.getsockname()
@@ -204,7 +207,7 @@ class Server:
 
 
 if __name__ == '__main__':
-    server = Server(("127.0.0.1", 8801), logging_level=logging.DEBUG)
+    server = Server(("::", 8801), logging_level=logging.DEBUG)
     server.register_stream(1, File("resources/file.txt"))
     server.register_stream(2, Ping(1))
     server.start(thread=False)
