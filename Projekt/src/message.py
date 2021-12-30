@@ -42,7 +42,7 @@ class Message:
         | 448 |               DATA               |
         +-----+----------------------------------+
         """
-        self.hash_algorith = hashlib.sha3_256()
+        self.hash_algorithm = hashlib.sha3_256()
         self.message_type = message_type
         self.identifier = identifier
         self.size = size
@@ -52,8 +52,8 @@ class Message:
             self.timestamp = timestamp
         self.data = data
         if data_hash is None:
-            self.hash_algorith.update(data)
-            self.data_hash = self.hash_algorith.digest()
+            self.hash_algorithm.update(data)
+            self.data_hash = self.hash_algorithm.digest()
         else:
             self.data_hash = data_hash
 
@@ -86,8 +86,8 @@ class Message:
         return Message(message_type, identifier, size, data, timestamp, data_hash)
 
     def check_hash(self) -> bool:
-        self.hash_algorith.update(self.data)
-        return self.hash_algorith.digest() == self.data_hash
+        self.hash_algorithm.update(self.data)
+        return self.hash_algorithm.digest() == self.data_hash
 
     def __repr__(self):
         human_time = time.asctime(time.localtime(self.timestamp))

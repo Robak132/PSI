@@ -9,8 +9,9 @@ from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
 from streams import File, Stream, Ping
 from netaddr import IPAddress
 
+
 class CommunicationThread(threading.Thread):
-    def __init__(self, stream: Stream, address, buffer_size, logger, server_addr = ('::', 0), interface = ''):
+    def __init__(self, stream: Stream, address, buffer_size, logger, server_addr=('::', 0), interface=''):
         super().__init__()
         self.logger = logger
 
@@ -227,7 +228,9 @@ class Server:
         stream = self.streams[stream_idx]
         stream.prepare()
 
-        self.threads.append(CommunicationThread(stream, address, self.buffer_size, self.logger, self.recv_address, self.interface))
+        communication_thread = CommunicationThread(stream, address, self.buffer_size, self.logger,
+                                                   self.recv_address, self.interface)
+        self.threads.append(communication_thread)
 
 
 if __name__ == '__main__':
