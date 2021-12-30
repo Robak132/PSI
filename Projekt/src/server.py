@@ -209,7 +209,7 @@ class Server:
             binary_data, address = self.receive_socket.recvfrom(self.buffer_size)
             message = Message.unpack(binary_data)
             if message.message_type == MessageType.REQ:
-                self.logger.info(f"Client request from {address[0]}:{address[1]}, stream idx: {message.identifier}")
+                self.logger.info(f"Client request from {address}, stream idx: {message.identifier}")
                 receive_port = struct.unpack("i", message.data)[0]
                 ip_address = address[0]
 
