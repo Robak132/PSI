@@ -12,29 +12,20 @@ import CONFIG as CFG
 
 
 class CommunicationThread(threading.Thread):
-    def __init__(self, stream: Stream, address, buffer_size, logger, server_address=('::', 0), interface=''):
+    def __init__(self, stream: Stream, address, buffer_size, logger, server_ip_address="::", interface=""):
         super().__init__()
         self.logger = logger
 
         self.CLIENT_NOT_RESPONDING_TIMEOUT = CFG.CLIENT_NOT_RESPONDING_TIMEOUT
-        self.client_lag = 0
-
         self.NEXT_MESSAGE_TIMEOUT = CFG.NEXT_MESSAGE_TIMEOUT
         self.ACK_TIMEOUT = CFG.ACK_TIMEOUT
-
-        server_address = (str(IPAddress(server_address[0]).ipv6()), 0)
-        if interface is not None and interface != '':
-            server_address = (server_address[0] + f'%{interface}', server_address[1])
-
         self.send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         self.send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
 
-        for address_info in socket.getaddrinfo(server_address[0], server_address[1]):
-            if address_info[0].name == 'AF_INET6' and address_info[1].name == 'SOCK_DGRAM':
-                server_address = address_info[4]
-                break
+        self.client_lag = 0
 
-        self.logger.debug(f'processed server_address: {server_address}')
+        server_address = (server_ip_address, 0)
+        server_address = Server.cast_address(server_address, interface, self.logger)
         self.send_socket.bind(server_address)
 
         self.receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -158,7 +149,7 @@ class Server:
         if address is None:
             address = ("::", 0)
         else:
-            address = self.cast_address(address)
+            address = self.cast_address(address, self.interface, self.logger)
 
         self.receive_socket.bind(address)
         self.receive_address = self.receive_socket.getsockname()
@@ -179,18 +170,19 @@ class Server:
         logger.addHandler(stderr_handler)
         return logger
 
-    def cast_address(self, address: tuple[str, int]):
-        ip_address, port = address
+    @staticmethod
+    def cast_address(address: tuple[str, int], interface, logger) -> tuple[str, int]:
+        ip_address, port, *_ = address
         ipV6_address = str(IPAddress(ip_address).ipv6())
         address = (ipV6_address, port)
 
-        if self.interface:
-            address = (ipV6_address + f"%{self.interface}", port)
+        if interface:
+            address = (ipV6_address + f"%{interface}", port)
 
         for socket_family, socket_type, _, _, socket_address in socket.getaddrinfo(*address):
             if socket_family.name == "AF_INET6" and socket_type.name == "SOCK_DGRAM":
                 address = socket_address
-                self.logger.debug(f"Cast address: {address}")
+                logger.debug(f"Cast address: {address}")
                 return address
 
     def register_stream(self, idx: int, stream: Stream):
@@ -235,7 +227,7 @@ class Server:
         stream.prepare()
 
         communication_thread = CommunicationThread(stream, address, self.buffer_size, self.logger,
-                                                   self.receive_address, self.interface)
+                                                   self.receive_address[0], self.interface)
         self.threads.append(communication_thread)
 
 
