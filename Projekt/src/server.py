@@ -180,22 +180,18 @@ class Server:
         return logger
 
     def cast_address(self, address: tuple[str, int]):
-        ADDRESS_IDX = 0
-        PORT_IDX = 1
+        ip_address, port = address
+        ipV6_address = str(IPAddress(ip_address).ipv6())
+        address = (ipV6_address, port)
 
-        ipV6 = str(IPAddress(address[ADDRESS_IDX]).ipv6())
-        port = address[PORT_IDX]
+        if self.interface:
+            address = (ipV6_address + f"%{self.interface}", port)
 
-        address = (ipV6, port)
-        if self.interface is not None and self.interface != '':
-            address = (address[0] + f'%{self.interface}', address[1])
-
-        for address_info in socket.getaddrinfo(address[0], address[1]):
-            if address_info[0].name == 'AF_INET6' and address_info[1].name == 'SOCK_DGRAM':
-                address = address_info[4]
-                break
-        self.logger.debug(f'Cast address: {address}')
-        return address
+        for socket_family, socket_type, _, _, socket_address in socket.getaddrinfo(*address):
+            if socket_family.name == "AF_INET6" and socket_type.name == "SOCK_DGRAM":
+                address = socket_address
+                self.logger.debug(f"Cast address: {address}")
+                return address
 
     def register_stream(self, idx: int, stream: Stream):
         self.streams[idx] = stream
@@ -234,7 +230,7 @@ class Server:
         except socket.timeout:
             return
 
-    def create_new_thread(self, stream_idx: int, address):
+    def create_new_thread(self, stream_idx: int, address: tuple):
         stream = self.streams[stream_idx]
         stream.prepare()
 
