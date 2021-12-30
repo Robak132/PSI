@@ -80,7 +80,7 @@ class CommunicationThread(threading.Thread):
             self.send_message(QuitMessage(1), self.address)
 
     def send_message(self, message: Message, address: Tuple[str, int]):
-        self.logger.debug(f"Send: {message}")
+        self.logger.debug(f"SEND: {message}")
         self.send_socket.sendto(message.pack(), address)
 
     def confirm(self) -> bool:
@@ -90,7 +90,7 @@ class CommunicationThread(threading.Thread):
             message = Message.unpack(binary_data)
             if message.message_type == MessageType.ACK:
                 ACK_id = message.identifier
-                self.logger.debug(f"receive: {message}")
+                self.logger.debug(f"RECV: {message}")
                 if self.message_idx == ACK_id:
                     self.message_idx += 1
                     return True
@@ -217,7 +217,7 @@ class Server:
                     self.logger.info(f"Sending stream {message.identifier} to {ip_address}:{receive_port}")
                     self.create_new_thread(message.identifier, (ip_address, receive_port))
                 else:
-                    self.logger.error(f"Error: stream doesn't exists.")
+                    self.logger.error(f"ERROR: stream doesn't exists.")
                     # TODO Send this error to client
         except socket.timeout:
             return
