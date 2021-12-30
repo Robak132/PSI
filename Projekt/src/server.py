@@ -153,26 +153,18 @@ class Server:
         self.receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
         self.receive_socket.settimeout(1)
 
-        self.interface = 'ens33' if False else ''
+        self.interface = "ens33" if False else ""
 
         if address is None:
-            self.receive_socket.bind(("::", 0))
+            address = ("::", 0)
         else:
-            address = (str(IPAddress(address[0]).ipv6()), address[1])
-            if self.interface is not None and self.interface != '':
-                address = (address[0] + f'%{self.interface}', address[1])
+            address = self.cast_address(address)
 
-            for address_info in socket.getaddrinfo(address[0], address[1]):
-                if address_info[0].name == 'AF_INET6' and address_info[1].name == 'SOCK_DGRAM':
-                    address = address_info[4]
-                    break
-
-            self.logger.debug(f'processed address: {address}')
-            self.receive_socket.bind(address)
+        self.receive_socket.bind(address)
         self.receive_address = self.receive_socket.getsockname()
         self.logger.info(f"Server bound on: {self.receive_address}")
 
-        self.running = True
+        self.is_running = True
         self.buffer_size = buffer_size
         self.streams = {}
         self.threads = []
@@ -187,11 +179,29 @@ class Server:
         logger.addHandler(stderr_handler)
         return logger
 
+    def cast_address(self, address: tuple[str, int]):
+        ADDRESS_IDX = 0
+        PORT_IDX = 1
+
+        ipV6 = str(IPAddress(address[ADDRESS_IDX]).ipv6())
+        port = address[PORT_IDX]
+
+        address = (ipV6, port)
+        if self.interface is not None and self.interface != '':
+            address = (address[0] + f'%{self.interface}', address[1])
+
+        for address_info in socket.getaddrinfo(address[0], address[1]):
+            if address_info[0].name == 'AF_INET6' and address_info[1].name == 'SOCK_DGRAM':
+                address = address_info[4]
+                break
+        self.logger.debug(f'Cast address: {address}')
+        return address
+
     def register_stream(self, idx: int, stream: Stream):
         self.streams[idx] = stream
 
     def stop(self):
-        self.running = False
+        self.is_running = False
         for thread in self.threads:
             thread.stop()
 
@@ -203,7 +213,7 @@ class Server:
             thread = StoppableThread(self.receive)
             self.threads.append(thread)
         else:
-            while self.running:
+            while self.is_running:
                 self.receive()
 
     def receive(self):
