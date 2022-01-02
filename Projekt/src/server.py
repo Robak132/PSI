@@ -174,6 +174,7 @@ class Server:
         if interface:
             address = (ipV6_address + f"%{interface}", port)
 
+            # FIXME Nie działa na Windows
         for socket_family, socket_type, _, _, socket_address in socket.getaddrinfo(*address):
             if socket_family.name == "AF_INET6" and socket_type.name == "SOCK_DGRAM":
                 address = socket_address
