@@ -36,6 +36,7 @@ class Client:
             binary_data = self.receive_socket.recv(448)
             message = Message.unpack(binary_data)
             if message.message_type == MessageType.FIN:
+                self.logger.debug(f'Received MSG (FIN). Ending transmission.')
                 break
             if message.message_type == MessageType.INF:
                 self.ack_port = struct.unpack("i", message.data)[0]
@@ -57,10 +58,12 @@ class Client:
                 self.send_message(ACKMessage(pkg_number), (target_ip, self.ack_port))
             if data_pkg_number == max_messages:
                 self.send_message(QuitMessage(1), (target_ip, self.ack_port))
+                self.logger.debug(f'Number of received packages reached designated limit. Ending transmission.')
                 break
         return result
 
     def send_message(self, message: Message, target: tuple[str, int]):
+        self.logger.debug(f'Sending message\tTYPE: {message.message_type}\tTIME: {message.timestamp}')
         self.send_socket.sendto(message.pack(), target)
 
     def request(self, stream: int, target: tuple[str, int], max_messages: int = None):
