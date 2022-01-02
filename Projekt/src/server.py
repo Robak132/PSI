@@ -7,6 +7,7 @@ import logging
 from typing import Tuple
 from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
 from streams import File, Stream, Ping
+from common import setup_loggers
 from netaddr import IPAddress
 import CONFIG as CFG
 
@@ -136,8 +137,12 @@ class StoppableThread(threading.Thread):
 
 
 class Server:
-    def __init__(self, address=None, logging_level: int = logging.INFO, buffer_size=448):
-        self.logger = self.setup_loggers(logging_level)
+    def __init__(self,
+                 address=None,
+                 buffer_size=448,
+                 *,
+                 logging_level: int = logging.INFO):
+        self.logger = setup_loggers(logging_level)
         self.setup_exit_handler()
 
         self.receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -159,16 +164,6 @@ class Server:
         self.buffer_size = buffer_size
         self.streams = {}
         self.threads = []
-
-    @staticmethod
-    def setup_loggers(logging_level: int):
-        logger = logging.getLogger(__name__)
-        logger.setLevel(logging_level)
-        log_format = '%(threadName)12s:%(levelname)8s %(message)s'
-        stderr_handler = logging.StreamHandler()
-        stderr_handler.setFormatter(logging.Formatter(log_format))
-        logger.addHandler(stderr_handler)
-        return logger
 
     @staticmethod
     def cast_address(address: tuple[str, int], interface, logger) -> tuple[str, int]:
