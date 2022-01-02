@@ -45,7 +45,7 @@ class File(Stream):
 class Ping(Stream):
     def __init__(self, delay: int):
         """
-        Simple infinite stream, which sends small message b'PING' every x seconds.
+        Simple infinite stream, which sends small message 'PING' every x seconds.
 
         :param delay: delay between pings
         """

@@ -8,40 +8,33 @@ from typing import Tuple
 from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
 from streams import File, Stream, Ping
 from netaddr import IPAddress
+import CONFIG as CFG
+
 
 class CommunicationThread(threading.Thread):
-    def __init__(self, stream: Stream, address, buffer_size, logger, server_addr = ('::', 0), interface = ''):
+    def __init__(self, stream: Stream, address, buffer_size, logger, server_ip_address="::", interface=""):
         super().__init__()
         self.logger = logger
 
-        self.CLIENT_NOT_RESPONDING_TIMEOUT = 30  # After this time server will close connection
-        self.client_lag = 0
-
-        self.NEXT_MESSAGE_TIMEOUT = 15  # How much time there is for new message to show up
-        self.ACK_TIMEOUT = 1            # How much time client has for confirmation (ACK)
-
-        server_addr = (str(IPAddress(server_addr[0]).ipv6()), 0)
-        if interface is not None and interface != '':
-            server_addr = (server_addr[0] + f'%{interface}', server_addr[1])
-
+        self.CLIENT_NOT_RESPONDING_TIMEOUT = CFG.CLIENT_NOT_RESPONDING_TIMEOUT
+        self.NEXT_MESSAGE_TIMEOUT = CFG.NEXT_MESSAGE_TIMEOUT
+        self.ACK_TIMEOUT = CFG.ACK_TIMEOUT
         self.send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         self.send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
 
-        for ainfo in socket.getaddrinfo(server_addr[0], server_addr[1]):
-            if ainfo[0].name == 'AF_INET6' and ainfo[1].name == 'SOCK_DGRAM':
-                server_addr = ainfo[4]
-                break
+        self.client_lag = 0
 
-        self.logger.debug(f'processed server_addr: {server_addr}')
-        self.send_socket.bind(server_addr)
+        server_address = (server_ip_address, 0)
+        server_address = Server.cast_address(server_address, interface, self.logger)
+        self.send_socket.bind(server_address)
 
-        self.recv_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        self.recv_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        self.recv_socket.bind(server_addr)
-        self.recv_socket.settimeout(self.ACK_TIMEOUT)
-        self.recv_port = self.recv_socket.getsockname()[1]
+        self.receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+        self.receive_socket.bind(server_address)
+        self.receive_socket.settimeout(self.ACK_TIMEOUT)
+        self.receive_port = self.receive_socket.getsockname()[1]
 
-        self.steam = stream
+        self.stream = stream
         self.message_idx = 0
         self.address = address
         self.buffer_size = buffer_size
@@ -59,7 +52,7 @@ class CommunicationThread(threading.Thread):
     def get_next_message(self):
         try:
             # I'm trying to get next message
-            data = self.steam.get_next_message(self.NEXT_MESSAGE_TIMEOUT)
+            data = self.stream.get_next_message(self.NEXT_MESSAGE_TIMEOUT)
             if data is not None:
                 return DataMessage(self.message_idx, data)
             else:
@@ -69,7 +62,7 @@ class CommunicationThread(threading.Thread):
             return DataMessage(self.message_idx)
 
     def run(self):
-        message = InfoMessage(self.message_idx, self.recv_port)
+        message = InfoMessage(self.message_idx, self.receive_port)
         while not self.stopped():
             self.send_message(message, self.address)
             if self.confirm():
@@ -81,23 +74,23 @@ class CommunicationThread(threading.Thread):
             if self.confirm():
                 message = self.get_next_message()
 
-        self.steam.close()
+        self.stream.close()
         self.logger.info("Transmission ended")
         if self.client_connected:
             self.send_message(QuitMessage(1), self.address)
 
     def send_message(self, message: Message, address: Tuple[str, int]):
-        self.logger.debug(f"Send: {message}")
+        self.logger.debug(f"SEND: {message}")
         self.send_socket.sendto(message.pack(), address)
 
     def confirm(self) -> bool:
         try:
             # Waiting for ACK
-            binary_data = self.recv_socket.recv(self.buffer_size)
+            binary_data = self.receive_socket.recv(self.buffer_size)
             message = Message.unpack(binary_data)
             if message.message_type == MessageType.ACK:
                 ACK_id = message.identifier
-                self.logger.debug(f"Recv: {message}")
+                self.logger.debug(f"RECV: {message}")
                 if self.message_idx == ACK_id:
                     self.message_idx += 1
                     return True
@@ -144,34 +137,25 @@ class StoppableThread(threading.Thread):
 
 class Server:
     def __init__(self, address=None, logging_level: int = logging.INFO, buffer_size=448):
-        super().__init__()
         self.logger = self.setup_loggers(logging_level)
         self.setup_exit_handler()
 
-        self.recv_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        self.recv_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        self.recv_socket.settimeout(1)
+        self.receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+        self.receive_socket.settimeout(1)
 
-        self.interface = 'ens33' if False else ''
+        self.interface = "ens33" if False else ""
 
         if address is None:
-            self.recv_socket.bind(("::", 0))
+            address = ("::", 0)
         else:
-            address = (str(IPAddress(address[0]).ipv6()), address[1])
-            if self.interface is not None and self.interface != '':
-                address = (address[0] + f'%{self.interface}', address[1])
+            address = self.cast_address(address, self.interface, self.logger)
 
-            for ainfo in socket.getaddrinfo(address[0], address[1]):
-                if ainfo[0].name == 'AF_INET6' and ainfo[1].name == 'SOCK_DGRAM':
-                    address = ainfo[4]
-                    break
+        self.receive_socket.bind(address)
+        self.receive_address = self.receive_socket.getsockname()
+        self.logger.info(f"Server bound on: {self.receive_address}")
 
-            self.logger.debug(f'processed address: {address}')
-            self.recv_socket.bind(address)
-        self.recv_address = self.recv_socket.getsockname()
-        self.logger.info(f"Server bound on: {self.recv_address}")
-
-        self.running = True
+        self.is_running = True
         self.buffer_size = buffer_size
         self.streams = {}
         self.threads = []
@@ -186,11 +170,26 @@ class Server:
         logger.addHandler(stderr_handler)
         return logger
 
+    @staticmethod
+    def cast_address(address: tuple[str, int], interface, logger) -> tuple[str, int]:
+        ip_address, port, *_ = address
+        ipV6_address = str(IPAddress(ip_address).ipv6())
+        address = (ipV6_address, port)
+
+        if interface:
+            address = (ipV6_address + f"%{interface}", port)
+
+        for socket_family, socket_type, _, _, socket_address in socket.getaddrinfo(*address):
+            if socket_family.name == "AF_INET6" and socket_type.name == "SOCK_DGRAM":
+                address = socket_address
+                logger.debug(f"Cast address: {address}")
+                return address
+
     def register_stream(self, idx: int, stream: Stream):
         self.streams[idx] = stream
 
     def stop(self):
-        self.running = False
+        self.is_running = False
         for thread in self.threads:
             thread.stop()
 
@@ -202,32 +201,34 @@ class Server:
             thread = StoppableThread(self.receive)
             self.threads.append(thread)
         else:
-            while self.running:
+            while self.is_running:
                 self.receive()
 
     def receive(self):
         try:
-            binary_data, address = self.recv_socket.recvfrom(self.buffer_size)
+            binary_data, address = self.receive_socket.recvfrom(self.buffer_size)
             message = Message.unpack(binary_data)
             if message.message_type == MessageType.REQ:
-                self.logger.info(f"Client request from {address[0]}:{address[1]}, stream idx: {message.identifier}")
-                recv_port = struct.unpack("i", message.data)[0]
+                self.logger.info(f"Client request from {address}, stream idx: {message.identifier}")
+                receive_port = struct.unpack("i", message.data)[0]
                 ip_address = address[0]
 
                 if message.identifier in self.streams.keys():
-                    self.logger.info(f"Sending stream {message.identifier} to {ip_address}:{recv_port}")
-                    self.create_new_thread(message.identifier, (ip_address, recv_port))
+                    self.logger.info(f"Sending stream {message.identifier} to {ip_address}:{receive_port}")
+                    self.create_new_thread(message.identifier, (ip_address, receive_port))
                 else:
-                    self.logger.error(f"Error: stream doesn't exists.")
+                    self.logger.error(f"ERROR: stream doesn't exists.")
                     # TODO Send this error to client
         except socket.timeout:
             return
 
-    def create_new_thread(self, stream_idx: int, address):
+    def create_new_thread(self, stream_idx: int, address: tuple):
         stream = self.streams[stream_idx]
         stream.prepare()
 
-        self.threads.append(CommunicationThread(stream, address, self.buffer_size, self.logger, self.recv_address, self.interface))
+        communication_thread = CommunicationThread(stream, address, self.buffer_size, self.logger,
+                                                   self.receive_address[0], self.interface)
+        self.threads.append(communication_thread)
 
 
 if __name__ == '__main__':
