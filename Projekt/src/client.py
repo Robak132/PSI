@@ -1,13 +1,21 @@
+import logging
 import socket
 import struct
 from netaddr.ip import IPAddress
 from message import Message, RequestMessage, ACKMessage, QuitMessage, MessageType
+from common import setup_loggers
 import CONFIG as CFG
 
 
 class Client:
-    def __init__(self, receive_address: tuple[str, int] = ("::", 0), send_address: tuple[str, int] = ("::", 0)):
+    def __init__(self,
+                 receive_address: tuple[str, int] = ("::", 0),
+                 send_address: tuple[str, int] = ("::", 0),
+                 *,
+                 logging_level: int = logging.INFO):
         self.SERVER_NOT_RESPONDING_TIMEOUT = CFG.SERVER_NOT_RESPONDING_TIMEOUT
+
+        self.logger = setup_loggers(logging_level)
 
         self.receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         self.receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
@@ -31,21 +39,21 @@ class Client:
                 break
             if message.message_type == MessageType.INF:
                 self.ack_port = struct.unpack("i", message.data)[0]
-                print(f'Sending ACKs to: {self.ack_port}')
+                self.logger.debug(f'Sending ACKs to: {self.ack_port}')
             elif message.message_type == MessageType.MSG and message.check_hash():
                 if message.size != 0:
-                    print(f'Received {message.message_type}: {message.identifier}')
+                    self.logger.debug(f'Received {message.message_type}: {message.identifier}')
                     if message.identifier == pkg_number + 1:
                         pkg_number += 1
                         data_pkg_number += 1
                         result += message.data
                 else:
-                    print(f'Received MSG (KEEP_ALIVE): {message.identifier}')
+                    self.logger.debug(f'Received MSG (KEEP_ALIVE): {message.identifier}')
                     if message.identifier == pkg_number + 1:
                         pkg_number += 1
 
             if self.ack_port is not None:
-                print(f"Sending ACK: {pkg_number}")
+                self.logger.debug(f"Sending ACK: {pkg_number}")
                 self.send_message(ACKMessage(pkg_number), (target_ip, self.ack_port))
             if data_pkg_number == max_messages:
                 self.send_message(QuitMessage(1), (target_ip, self.ack_port))
@@ -62,6 +70,6 @@ class Client:
 
 
 if __name__ == '__main__':
-    client = Client()
+    client = Client(logging_level=logging.INFO)
     data = client.request(stream=1, target=("127.0.0.1", 8801))
     print(data.decode("utf-8"))
