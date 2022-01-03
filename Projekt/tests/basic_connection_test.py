@@ -22,7 +22,7 @@ class TestBasicConnectionV4:
 
 class TestBasicConnectionV6:
     def test_basic_connection_ipv6(self):
-        server = Server(ipv6_address=("::1", 8888), logging_level=logging.CRITICAL)
+        server = Server(logging_level=logging.CRITICAL)
         server.register_stream(1, File("tests/resources/test_file.txt"))
 
         _, receive_port, *_ = server.ipv6_receive_address

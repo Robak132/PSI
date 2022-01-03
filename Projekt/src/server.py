@@ -1,8 +1,7 @@
-import queue
 import signal
 import socket
-import struct
 import logging
+from queue import Empty
 from select import select
 from time import time
 from typing import Tuple
@@ -52,7 +51,7 @@ class CommunicationThreadV4(StoppableThread):
                 return DataMessage(self.message_idx, data)
             else:
                 return None
-        except queue.Empty:
+        except Empty:
             # There is no available message, I need to keep connection alive
             return DataMessage(self.message_idx)
 
@@ -194,7 +193,7 @@ class Server:
             message = Message.unpack(binary_data)
             if message.message_type == MessageType.REQ:
                 self.logger.info(f"Client request from {address}, stream idx: {message.identifier}")
-                receive_port = struct.unpack("i", message.data)[0]
+                receive_port = message.data_to_int()
                 ip_address = address[0]
 
                 if message.identifier in self.streams.keys():

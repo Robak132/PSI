@@ -1,7 +1,6 @@
 import logging
 import signal
 import socket
-import struct
 from time import time, sleep
 
 from decorators import thread_request
@@ -63,7 +62,7 @@ class ClientV4:
                         self.is_running = False
                         break
                     elif message.message_type == MessageType.INF:
-                        ack_port = struct.unpack("i", message.data)[0]
+                        ack_port = message.data_to_int()
                         if self.ack_port != ack_port:
                             self.ack_port = ack_port
                             self.logger.info(f'Sending ACKs to: {ack_port}')
@@ -114,7 +113,7 @@ class ClientV4:
 
     @thread_request
     def request_thread(self, stream: int, target: tuple[str, int], max_messages: int = None):
-        return self.request(stream, target, max_messages)
+        return self.request_blocking(stream, target, max_messages)
 
 
 class ClientV6(ClientV4):
