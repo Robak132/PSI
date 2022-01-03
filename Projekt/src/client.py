@@ -19,13 +19,13 @@ class Client:
         self.setup_exit_handler()
 
         self.SERVER_NOT_RESPONDING_TIMEOUT = CFG.SERVER_NOT_RESPONDING_TIMEOUT
-        self.ACK_TIMEOUT = CFG.CLIENT_ACK_TIMEOUT
+        self.CLIENT_ACK_TIMEOUT = CFG.CLIENT_ACK_TIMEOUT
         self.server_lag = 0
 
         self.receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         self.receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
         self.receive_socket.bind(receive_address)
-        self.receive_socket.settimeout(self.ACK_TIMEOUT)
+        self.receive_socket.settimeout(self.CLIENT_ACK_TIMEOUT)
         self.receive_port = self.receive_socket.getsockname()[1]
 
         self.send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -52,13 +52,17 @@ class Client:
                     message = self.receive_message()
                     if message.message_type == MessageType.FIN:
                         self.logger.info("Transmission ended")
+                        self.is_running = False
                         break
                     elif message.message_type == MessageType.ERR:
                         self.logger.error(f"{message.data.decode('utf-8')}")
+                        self.is_running = False
                         break
                     elif message.message_type == MessageType.INF:
-                        self.ack_port = struct.unpack("i", message.data)[0]
-                        self.logger.info(f'Sending ACKs to: {self.ack_port}')
+                        ack_port = struct.unpack("i", message.data)[0]
+                        if self.ack_port != ack_port:
+                            self.ack_port = ack_port
+                            self.logger.info(f'Sending ACKs to: {ack_port}')
                     elif message.identifier == pkg_number + 1 and message.message_type == MessageType.MSG and message.check_hash():
                         pkg_number += 1
                         self.server_lag = 0
@@ -69,7 +73,7 @@ class Client:
                                 self.logger.info(f'Limit of received packages reached. Ending transmission.')
                                 self.is_running = False
             except socket.timeout:
-                self.server_lag = self.server_lag + self.ACK_TIMEOUT
+                self.server_lag = self.server_lag + self.CLIENT_ACK_TIMEOUT
                 if self.server_lag >= self.SERVER_NOT_RESPONDING_TIMEOUT:
                     self.logger.info("Server not responding: timeout")
                     self.is_running = False
@@ -116,6 +120,6 @@ class ClientWithLag(Client):
 
 
 if __name__ == '__main__':
-    client = ClientWithLag(logging_level=logging.DEBUG, lag=0.5)
+    client = ClientWithLag(logging_level=logging.DEBUG, lag=0.1)
     data = client.request(stream=1, target=("127.0.0.1", 8801))
     # print(data.decode("utf-8"))

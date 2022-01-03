@@ -8,7 +8,7 @@ from time import time
 from typing import Tuple
 from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
 from streams import File, Stream, Ping
-from common import setup_loggers
+from common import setup_loggers, StoppableThread
 from netaddr import IPAddress
 import CONFIG as CFG
 
@@ -20,7 +20,7 @@ class CommunicationThread(threading.Thread):
 
         self.CLIENT_NOT_RESPONDING_TIMEOUT = CFG.CLIENT_NOT_RESPONDING_TIMEOUT
         self.NEXT_MESSAGE_TIMEOUT = CFG.NEXT_MESSAGE_TIMEOUT
-        self.ACK_TIMEOUT = CFG.SERVER_ACK_TIMEOUT
+        self.SERVER_ACK_TIMEOUT = CFG.SERVER_ACK_TIMEOUT
         self.client_lag = 0
 
         server_address = (server_ip_address, 0)
@@ -29,7 +29,7 @@ class CommunicationThread(threading.Thread):
         self.receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         self.receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
         self.receive_socket.bind(server_address)
-        self.receive_socket.settimeout(self.ACK_TIMEOUT)
+        self.receive_socket.settimeout(self.SERVER_ACK_TIMEOUT)
         self.receive_port = self.receive_socket.getsockname()[1]
 
         self.send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -98,7 +98,7 @@ class CommunicationThread(threading.Thread):
                     return False
         except socket.timeout:
             # Timeout, I need to send another message
-            self.client_lag = self.client_lag + self.ACK_TIMEOUT
+            self.client_lag = self.client_lag + self.SERVER_ACK_TIMEOUT
             self.readjust_timeout(self.client_lag)
             if self.client_lag >= self.CLIENT_NOT_RESPONDING_TIMEOUT:
                 self.logger.info("Client not responding: timeout")
@@ -117,37 +117,11 @@ class CommunicationThread(threading.Thread):
         return message
 
     def readjust_timeout(self, lag):
-        if lag >= self.ACK_TIMEOUT:
+        if lag > self.SERVER_ACK_TIMEOUT:
             self.logger.info(f"Readjusting ACK timeout "
-                             f"{self.ACK_TIMEOUT}->{self.ACK_TIMEOUT * 2}")
-            self.ACK_TIMEOUT *= 2
-            self.receive_socket.settimeout(self.ACK_TIMEOUT)
-
-
-class StoppableThread(threading.Thread):
-    """
-    Thread class with a stop() method. The thread itself has to check
-    regularly for the stopped() condition.
-
-    Based on: https://stackoverflow.com/questions/47912701/python-how-can-i-implement-a-stoppable-thread
-    """
-
-    def __init__(self, task):
-        super().__init__()
-        self._stop_event = threading.Event()
-        self.task = task
-
-        self.start()
-
-    def stop(self):
-        self._stop_event.set()
-
-    def stopped(self):
-        return self._stop_event.is_set()
-
-    def run(self):
-        while not self.stopped():
-            self.task()
+                             f"{self.SERVER_ACK_TIMEOUT}->{self.SERVER_ACK_TIMEOUT * 2}")
+            self.SERVER_ACK_TIMEOUT *= 2
+            self.receive_socket.settimeout(self.SERVER_ACK_TIMEOUT)
 
 
 class Server:
