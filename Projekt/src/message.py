@@ -13,6 +13,10 @@ class MessageType(Enum):
     INF = 0b0100000
 
 
+class ErrorType(Enum):
+    STREAM_NOT_FOUND = 1
+
+
 class Message:
     def __init__(self,
                  message_type: MessageType,
@@ -89,6 +93,10 @@ class Message:
         self.hash_algorithm.update(self.data)
         return self.hash_algorithm.digest() == self.data_hash
 
+    def data_to_int(self, idx: int = 0) -> int:
+        idx = idx * 4
+        return struct.unpack(f"i", self.data[idx:idx+4])[0]
+
     def __repr__(self):
         human_time = time.asctime(time.localtime(self.timestamp))
         return f"{self.message_type.name} {self.identifier}: {human_time} [{self.size}]"
@@ -97,6 +105,11 @@ class Message:
 class RequestMessage(Message):
     def __init__(self, identifier: int, port: int):
         super().__init__(MessageType.REQ, identifier, 4, struct.pack("i", port))
+
+
+class ErrorMessage(Message):
+    def __init__(self, error: ErrorType):
+        super().__init__(MessageType.ERR, error.value)
 
 
 class DataMessage(Message):

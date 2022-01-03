@@ -1,19 +1,18 @@
 import logging
 import signal
 import socket
-import struct
-from time import time, sleep
-from netaddr.ip import IPAddress
-from message import Message, RequestMessage, ACKMessage, QuitMessage, MessageType
-from common import setup_loggers
+from time import sleep
+from decorators import thread_request
+from message import Message, RequestMessage, ACKMessage, QuitMessage, MessageType, ErrorType
+from common import setup_loggers, receive_message, send_message, setup_sockets_ipv4, setup_sockets_ipv6
 import CONFIG as CFG
 
 
-class Client:
+class ClientV4:
     def __init__(self,
-                 receive_address: tuple[str, int] = ("::", 0),
-                 send_address: tuple[str, int] = ("::", 0),
-                 *,
+                 receive_address: tuple[str, int] = ("", 0),
+                 send_address: tuple[str, int] = ("", 0),
+                 buffer_size: int = 448,
                  logging_level: int = logging.INFO):
         self.logger = setup_loggers(logging_level)
         self.setup_exit_handler()
@@ -22,19 +21,16 @@ class Client:
         self.CLIENT_ACK_TIMEOUT = CFG.CLIENT_ACK_TIMEOUT
         self.server_lag = 0
 
-        self.receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        self.receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        self.receive_socket.bind(receive_address)
-        self.receive_socket.settimeout(self.CLIENT_ACK_TIMEOUT)
+        self.receive_socket, self.send_socket = self.setup_sockets(receive_address, send_address)
         self.receive_port = self.receive_socket.getsockname()[1]
 
-        self.send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        self.send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        self.send_socket.bind(send_address)
-
+        self.buffer_size = buffer_size
         self.target_ip = None
         self.ack_port = None
         self.is_running = True
+
+    def setup_sockets(self, receive_address, send_address):
+        return setup_sockets_ipv4(receive_address, self.CLIENT_ACK_TIMEOUT, send_address)
 
     def setup_exit_handler(self):
         signal.signal(signal.SIGINT, lambda sig, frame: self.stop())
@@ -55,11 +51,11 @@ class Client:
                         self.is_running = False
                         break
                     elif message.message_type == MessageType.ERR:
-                        self.logger.error(f"{message.data.decode('utf-8')}")
+                        self.logger.error(f"{ErrorType(message.identifier).name}")
                         self.is_running = False
                         break
                     elif message.message_type == MessageType.INF:
-                        ack_port = struct.unpack("i", message.data)[0]
+                        ack_port = message.data_to_int()
                         if self.ack_port != ack_port:
                             self.ack_port = ack_port
                             self.logger.info(f'Sending ACKs to: {ack_port}')
@@ -87,24 +83,37 @@ class Client:
         return result
 
     def receive_message(self) -> Message:
-        binary_data = self.receive_socket.recv(448)
-        message = Message.unpack(binary_data)
-        lag = time() - message.timestamp
-        self.logger.debug(f'RECV: {message}, lag = {lag:.2f}')
+        message, _ = receive_message(self.receive_socket, self.buffer_size, self.logger)
         return message
 
     def send_message(self, message: Message, target: tuple[str, int]):
-        self.logger.debug(f'SEND: {message}')
-        self.send_socket.sendto(message.pack(), target)
+        send_message(self.send_socket, message, target, self.logger)
 
-    def request(self, stream: int, target: tuple[str, int], max_messages: int = None):
-        target = (str(IPAddress(target[0]).ipv6()), target[1])
+    def request(self, stream: int, target: tuple[str, int], thread: bool = False, max_messages: int = None):
+        if thread:
+            return self.request_nonblocking(stream, target, max_messages)
+        else:
+            return self.request_blocking(stream, target, max_messages)
+
+    def request_blocking(self, stream: int, target: tuple[str, int], max_messages: int = None):
         self.target_ip, _ = target
         self.send_message(RequestMessage(stream, self.receive_port), target)
         return self.receive(max_messages)
 
+    @thread_request
+    def request_nonblocking(self, stream: int, target: tuple[str, int], max_messages: int = None):
+        return self.request_blocking(stream, target, max_messages)
 
-class ClientWithLag(Client):
+
+class ClientV6(ClientV4):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def setup_sockets(self, receive_address, send_address):
+        return setup_sockets_ipv6(receive_address, self.CLIENT_ACK_TIMEOUT, send_address)
+
+
+class ClientV4WithLag(ClientV4):
     def __init__(self, lag: float = 0, **kwargs):
         super().__init__(**kwargs)
         self.lag = lag
@@ -119,6 +128,6 @@ class ClientWithLag(Client):
 
 
 if __name__ == '__main__':
-    client = Client(logging_level=logging.DEBUG)
+    client = ClientV4(logging_level=logging.DEBUG)
     data = client.request(stream=1, target=("127.0.0.1", 8801))
     # print(data.decode("utf-8"))

@@ -1,21 +1,18 @@
-import queue
 import signal
 import socket
-import struct
-import threading
 import logging
-from time import time, sleep
+from queue import Empty
+from select import select
 from typing import Tuple
-from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
+from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType, ErrorMessage, ErrorType
 from streams import File, Stream, Ping
-from common import setup_loggers, StoppableThread
+from common import setup_loggers, StoppableThread, send_message, receive_message, setup_sockets_ipv4, setup_sockets_ipv6
 from netaddr import IPAddress
 import CONFIG as CFG
 
 
-class CommunicationThread(threading.Thread):
-    def __init__(self, stream: Stream, address, buffer_size, logger, server_ip_address="::", interface=""):
-        super().__init__()
+class CommunicationThreadV4(StoppableThread):
+    def __init__(self, stream: Stream, address, buffer_size, logger, server_ip_address="::"):
         self.logger = logger
 
         self.CLIENT_NOT_RESPONDING_TIMEOUT = CFG.CLIENT_NOT_RESPONDING_TIMEOUT
@@ -23,18 +20,7 @@ class CommunicationThread(threading.Thread):
         self.SERVER_ACK_TIMEOUT = CFG.SERVER_ACK_TIMEOUT
         self.client_lag = 0
 
-        server_address = (server_ip_address, 0)
-        server_address = Server.cast_address(server_address, interface, self.logger)
-
-        self.receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        self.receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        self.receive_socket.bind(server_address)
-        self.receive_socket.settimeout(self.SERVER_ACK_TIMEOUT)
-        self.receive_port = self.receive_socket.getsockname()[1]
-
-        self.send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        self.send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        self.send_socket.bind(server_address)
+        self.receive_socket, self.receive_port, self.send_socket, self.send_port = self.setup_sockets(server_ip_address)
 
         self.stream = stream
         self.message_idx = 0
@@ -42,14 +28,19 @@ class CommunicationThread(threading.Thread):
         self.buffer_size = buffer_size
         self.client_connected = True
 
-        self.stop_event = threading.Event()
-        super().start()
+        super().__init__()
 
-    def stop(self):
-        self.stop_event.set()
+    def setup_sockets(self, ip_address):
+        receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        receive_socket.bind((ip_address, 0))
+        receive_socket.settimeout(self.SERVER_ACK_TIMEOUT)
+        receive_port = receive_socket.getsockname()[1]
 
-    def stopped(self):
-        return self.stop_event.is_set()
+        send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        send_socket.bind((ip_address, 0))
+        send_port = receive_socket.getsockname()[1]
+
+        return receive_socket, receive_port, send_socket, send_port
 
     def get_next_message(self):
         try:
@@ -59,33 +50,33 @@ class CommunicationThread(threading.Thread):
                 return DataMessage(self.message_idx, data)
             else:
                 return None
-        except queue.Empty:
+        except Empty:
             # There is no available message, I need to keep connection alive
             return DataMessage(self.message_idx)
 
     def run(self):
         message = InfoMessage(self.message_idx, self.receive_port)
         while not self.stopped():
-            self.send_message(message, self.address)
+            send_message(self.send_socket, message, self.address, self.logger)
             if self.confirm():
                 break
 
         message = self.get_next_message()
         while not self.stopped() and message is not None and self.client_connected:
-            self.send_message(message, self.address)
+            send_message(self.send_socket, message, self.address, self.logger)
             if self.confirm():
                 message = self.get_next_message()
 
         self.stream.close()
         self.logger.info("Transmission ended")
         if self.client_connected:
-            self.send_message(QuitMessage(1), self.address)
+            send_message(self.send_socket, QuitMessage(1), self.address, self.logger)
 
     def confirm(self) -> bool:
         try:
             while True:
                 # Waiting for ACK
-                message = self.receive_message()
+                message, _ = receive_message(self.receive_socket, self.buffer_size, self.logger)
                 if message.message_type == MessageType.ACK:
                     ACK_id = message.identifier
                     if self.message_idx == ACK_id:
@@ -105,17 +96,6 @@ class CommunicationThread(threading.Thread):
                 self.client_connected = False
             return False
 
-    def send_message(self, message: Message, address: Tuple[str, int]):
-        self.logger.debug(f"SEND: {message}")
-        self.send_socket.sendto(message.pack(), address)
-
-    def receive_message(self):
-        binary_data = self.receive_socket.recv(self.buffer_size)
-        message = Message.unpack(binary_data)
-        lag = time() - message.timestamp
-        self.logger.debug(f'RECV: {message}, lag = {lag:.2f}')
-        return message
-
     def readjust_timeout(self, lag):
         if lag > self.SERVER_ACK_TIMEOUT:
             self.logger.info(f"Readjusting ACK timeout "
@@ -124,56 +104,61 @@ class CommunicationThread(threading.Thread):
             self.receive_socket.settimeout(self.SERVER_ACK_TIMEOUT)
 
 
+class CommunicationThreadV6(CommunicationThreadV4):
+    def __init__(self,  **kwargs):
+        super().__init__(**kwargs)
+
+    def setup_sockets(self, ip_address):
+        receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, True)
+        receive_socket.bind((ip_address, 0, 0, 0))
+        receive_socket.settimeout(self.SERVER_ACK_TIMEOUT)
+        receive_port = receive_socket.getsockname()[1]
+
+        send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, True)
+        send_socket.bind((ip_address, 0, 0, 0))
+        send_port = receive_socket.getsockname()[1]
+
+        return receive_socket, receive_port, send_socket, send_port
+
+
 class Server:
     def __init__(self,
-                 address=None,
-                 buffer_size=448,
-                 *,
+                 ipv4_receive_address: tuple[str, int] = ("", 0),
+                 ipv4_send_address: tuple[str, int] = ("", 0),
+                 ipv6_receive_address: tuple[str, int, int, int] = ("", 0, 0, 0),
+                 ipv6_send_address: tuple[str, int, int, int] = ("", 0, 0, 0),
+                 buffer_size: int = 448,
                  logging_level: int = logging.INFO):
         self.logger = setup_loggers(logging_level)
         self.setup_exit_handler()
 
-        self.receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        self.receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        self.receive_socket.settimeout(1)
+        self.sockets = []
 
-        self.interface = "ens33" if False else ""
+        self.ipv4_receive_socket, self.ipv4_send_socket = setup_sockets_ipv4(ipv4_receive_address, 1, ipv4_send_address)
+        self.ipv4_receive_address = self.ipv4_receive_socket.getsockname()
+        self.logger.info(f"Server IPv4 bound on: {self.ipv4_receive_address}")
+        self.sockets.append(self.ipv4_receive_socket)
 
-        if address is None:
-            address = ("::", 0)
-        else:
-            address = self.cast_address(address, self.interface, self.logger)
-
-        self.receive_socket.bind(address)
-        self.receive_address = self.receive_socket.getsockname()
-        self.logger.info(f"Server bound on: {self.receive_address}")
+        self.ipv6_receive_socket, self.ipv6_send_socket = setup_sockets_ipv6(ipv6_receive_address, 1, ipv6_send_address)
+        self.ipv6_receive_address = self.ipv6_receive_socket.getsockname()
+        self.logger.info(f"Server IPv6 bound on: {self.ipv6_receive_address}")
+        self.sockets.append(self.ipv6_receive_socket)
 
         self.is_running = True
+        self.main_thread = None
         self.buffer_size = buffer_size
         self.streams = {}
         self.threads = []
-
-    @staticmethod
-    def cast_address(address: tuple[str, int], interface, logger) -> tuple[str, int]:
-        ip_address, port, *_ = address
-        ipV6_address = str(IPAddress(ip_address).ipv6())
-        address = (ipV6_address, port)
-
-        if interface:
-            address = (ipV6_address + f"%{interface}", port)
-
-            # FIXME Nie działa na Windows
-        for socket_family, socket_type, _, _, socket_address in socket.getaddrinfo(*address):
-            if socket_family.name == "AF_INET6":
-                address = socket_address
-                logger.debug(f"Cast address: {address}")
-                return address
 
     def register_stream(self, idx: int, stream: Stream):
         self.streams[idx] = stream
 
     def stop(self):
         self.is_running = False
+        if self.main_thread is not None:
+            self.main_thread.stop()
         for thread in self.threads:
             thread.stop()
 
@@ -182,74 +167,54 @@ class Server:
 
     def start(self, thread=True):
         if thread:
-            thread = StoppableThread(self.receive)
-            self.threads.append(thread)
+            self.main_thread = StoppableThread(self.receive)
         else:
             while self.is_running:
                 self.receive()
 
+    def send_error(self, message: Message, address: Tuple[str, int]):
+        self.logger.debug(f"SEND: {message}")
+        ip_version = IPAddress(address[0]).version
+        send_socket = self.ipv4_send_socket if ip_version == 4 else self.ipv6_send_socket
+        send_message(send_socket, message, address, self.logger)
+
     def receive(self):
-        try:
-            binary_data, address = self.receive_socket.recvfrom(self.buffer_size)
-            message = Message.unpack(binary_data)
+        ready_sockets, _, _ = select(self.sockets, [], [], 1)
+        for ready_socket in ready_sockets:
+            message, address = receive_message(ready_socket, self.buffer_size, self.logger)
             if message.message_type == MessageType.REQ:
                 self.logger.info(f"Client request from {address}, stream idx: {message.identifier}")
-                receive_port = struct.unpack("i", message.data)[0]
-                ip_address = address[0]
+                ip_address, *_ = address
+                address = (ip_address, message.data_to_int())
+                ip_version = IPAddress(ip_address).version
 
                 if message.identifier in self.streams.keys():
-                    self.logger.info(f"Sending stream {message.identifier} to {ip_address}:{receive_port}")
-                    self.create_new_thread(message.identifier, (ip_address, receive_port))
+                    self.logger.info(f"Sending stream {message.identifier} to {address}")
+                    self.create_new_thread(message.identifier, address, ip_version)
                 else:
-                    self.logger.error(f"ERROR: stream doesn't exists.")
-                    # TODO Send this error to client
-        except socket.timeout:
-            return
+                    self.send_error(ErrorMessage(ErrorType.STREAM_NOT_FOUND), address)
 
-    def create_new_thread(self, stream_idx: int, address: tuple):
+    def create_new_thread(self, stream_idx: int, address: tuple, version: int):
         stream = self.streams[stream_idx]
         stream.prepare()
 
-        communication_thread = CommunicationThread(stream, address, self.buffer_size, self.logger,
-                                                   self.receive_address[0], self.interface)
-        self.threads.append(communication_thread)
-
-
-class CommunicationThreadWithLag(CommunicationThread):
-    def __init__(self, lag: float = 0, **kwargs):
-        self.lag = lag
-        super().__init__(**kwargs)
-
-    def send_message(self, message: Message, address: Tuple[str, int]):
-        sleep(self.lag)
-        super().send_message(message, address)
-
-    def receive_message(self):
-        sleep(self.lag)
-        return super().receive_message()
-
-
-class ServerWithLag(Server):
-    def __init__(self, lag: float = 0, **kwargs):
-        super().__init__(**kwargs)
-        self.lag = lag
-
-    def create_new_thread(self, stream_idx: int, address: tuple):
-        stream = self.streams[stream_idx]
-        stream.prepare()
-
-        communication_thread = CommunicationThreadWithLag(stream=stream,
-                                                          address=address,
-                                                          buffer_size=self.buffer_size,
-                                                          logger=self.logger,
-                                                          server_ip_address=self.receive_address[0],
-                                                          interface=self.interface,
-                                                          lag=self.lag)
+        if version == 4:
+            communication_thread = CommunicationThreadV4(stream=stream,
+                                                         address=address,
+                                                         buffer_size=self.buffer_size,
+                                                         logger=self.logger,
+                                                         server_ip_address=self.ipv4_receive_address[0])
+        else:
+            communication_thread = CommunicationThreadV6(stream=stream,
+                                                         address=address,
+                                                         buffer_size=self.buffer_size,
+                                                         logger=self.logger,
+                                                         server_ip_address=self.ipv6_receive_address[0])
         self.threads.append(communication_thread)
 
 
 if __name__ == '__main__':
-    server = ServerWithLag(address=('127.0.0.1', 8801), logging_level=logging.DEBUG, lag=0.1)
+    server = Server(ipv4_receive_address=("127.0.0.1", 8801), logging_level=logging.DEBUG)
     server.register_stream(1, File("resources/file.txt"))
     server.register_stream(2, Ping(1))
     server.start(thread=False)
