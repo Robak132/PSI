@@ -4,6 +4,7 @@ import socket
 import struct
 import threading
 import logging
+from time import time
 from typing import Tuple
 from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
 from streams import File, Stream, Ping
@@ -19,21 +20,21 @@ class CommunicationThread(threading.Thread):
 
         self.CLIENT_NOT_RESPONDING_TIMEOUT = CFG.CLIENT_NOT_RESPONDING_TIMEOUT
         self.NEXT_MESSAGE_TIMEOUT = CFG.NEXT_MESSAGE_TIMEOUT
-        self.ACK_TIMEOUT = CFG.ACK_TIMEOUT
-        self.send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        self.send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-
+        self.ACK_TIMEOUT = CFG.SERVER_ACK_TIMEOUT
         self.client_lag = 0
 
         server_address = (server_ip_address, 0)
         server_address = Server.cast_address(server_address, interface, self.logger)
-        self.send_socket.bind(server_address)
 
         self.receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         self.receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
         self.receive_socket.bind(server_address)
         self.receive_socket.settimeout(self.ACK_TIMEOUT)
         self.receive_port = self.receive_socket.getsockname()[1]
+
+        self.send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+        self.send_socket.bind(server_address)
 
         self.stream = stream
         self.message_idx = 0
@@ -80,34 +81,47 @@ class CommunicationThread(threading.Thread):
         if self.client_connected:
             self.send_message(QuitMessage(1), self.address)
 
-    def send_message(self, message: Message, address: Tuple[str, int]):
-        self.logger.debug(f"SEND: {message}")
-        self.send_socket.sendto(message.pack(), address)
-
     def confirm(self) -> bool:
         try:
-            # Waiting for ACK
-            binary_data = self.receive_socket.recv(self.buffer_size)
-            message = Message.unpack(binary_data)
-            if message.message_type == MessageType.ACK:
-                ACK_id = message.identifier
-                self.logger.debug(f"RECV: {message}")
-                if self.message_idx == ACK_id:
-                    self.message_idx += 1
-                    return True
-            elif message.message_type == MessageType.FIN:
-                self.logger.info("Client closed connection")
-                self.client_connected = False
-                return False
-
+            while True:
+                # Waiting for ACK
+                message = self.receive_message()
+                if message.message_type == MessageType.ACK:
+                    ACK_id = message.identifier
+                    if self.message_idx == ACK_id:
+                        self.message_idx += 1
+                        self.client_lag = 0
+                        return True
+                elif message.message_type == MessageType.FIN:
+                    self.logger.info("Client closed connection")
+                    self.client_connected = False
+                    return False
         except socket.timeout:
             # Timeout, I need to send another message
-            # FIXME: Zrobić lepiej
-            self.client_lag += self.ACK_TIMEOUT
+            self.client_lag = self.client_lag + self.ACK_TIMEOUT
+            self.readjust_timeout(self.client_lag)
             if self.client_lag >= self.CLIENT_NOT_RESPONDING_TIMEOUT:
                 self.logger.info("Client not responding: timeout")
                 self.client_connected = False
             return False
+
+    def send_message(self, message: Message, address: Tuple[str, int]):
+        self.logger.debug(f"SEND: {message}")
+        self.send_socket.sendto(message.pack(), address)
+
+    def receive_message(self):
+        binary_data = self.receive_socket.recv(self.buffer_size)
+        message = Message.unpack(binary_data)
+        lag = time() - message.timestamp
+        self.logger.debug(f'RECV: {message}, lag = {lag:.2f}')
+        return message
+
+    def readjust_timeout(self, lag):
+        if lag >= self.ACK_TIMEOUT:
+            self.logger.info(f"Readjusting ACK timeout "
+                             f"{self.ACK_TIMEOUT}->{self.ACK_TIMEOUT * 2}")
+            self.ACK_TIMEOUT *= 2
+            self.receive_socket.settimeout(self.ACK_TIMEOUT)
 
 
 class StoppableThread(threading.Thread):
@@ -176,7 +190,7 @@ class Server:
 
             # FIXME Nie działa na Windows
         for socket_family, socket_type, _, _, socket_address in socket.getaddrinfo(*address):
-            if socket_family.name == "AF_INET6" and socket_type.name == "SOCK_DGRAM":
+            if socket_family.name == "AF_INET6":
                 address = socket_address
                 logger.debug(f"Cast address: {address}")
                 return address
@@ -228,7 +242,7 @@ class Server:
 
 
 if __name__ == '__main__':
-    server = Server(('127.0.0.1', 8801), logging_level=logging.INFO)
+    server = Server(('127.0.0.1', 8801), logging_level=logging.DEBUG)
     server.register_stream(1, File("resources/file.txt"))
     server.register_stream(2, Ping(1))
     server.start(thread=False)
