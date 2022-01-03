@@ -10,11 +10,10 @@ class StoppableThread(threading.Thread):
     Based on: https://stackoverflow.com/questions/47912701/python-how-can-i-implement-a-stoppable-thread
     """
 
-    def __init__(self, task):
+    def __init__(self, task=None):
         super().__init__()
         self._stop_event = threading.Event()
         self.task = task
-
         self.start()
 
     def stop(self):

@@ -3,17 +3,17 @@ import signal
 import socket
 import struct
 from time import time, sleep
-from netaddr.ip import IPAddress
+
+from decorators import thread_request
 from message import Message, RequestMessage, ACKMessage, QuitMessage, MessageType
 from common import setup_loggers
 import CONFIG as CFG
 
 
-class Client:
+class ClientV4:
     def __init__(self,
-                 receive_address: tuple[str, int] = ("::", 0),
-                 send_address: tuple[str, int] = ("::", 0),
-                 *,
+                 receive_address: tuple[str, int] = ("", 0),
+                 send_address: tuple[str, int] = ("", 0),
                  logging_level: int = logging.INFO):
         self.logger = setup_loggers(logging_level)
         self.setup_exit_handler()
@@ -22,19 +22,23 @@ class Client:
         self.CLIENT_ACK_TIMEOUT = CFG.CLIENT_ACK_TIMEOUT
         self.server_lag = 0
 
-        self.receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        self.receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        self.receive_socket.bind(receive_address)
-        self.receive_socket.settimeout(self.CLIENT_ACK_TIMEOUT)
-        self.receive_port = self.receive_socket.getsockname()[1]
-
-        self.send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        self.send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        self.send_socket.bind(send_address)
-
+        self.receive_socket, self.receive_port, self.send_socket, self.send_port = self.setup_sockets(receive_address,
+                                                                                                      send_address)
         self.target_ip = None
         self.ack_port = None
         self.is_running = True
+
+    def setup_sockets(self, receive_address, send_address):
+        receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        receive_socket.bind(receive_address)
+        receive_socket.settimeout(self.CLIENT_ACK_TIMEOUT)
+        receive_port = receive_socket.getsockname()[1]
+
+        send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        send_socket.bind(send_address)
+        send_port = receive_socket.getsockname()[1]
+
+        return receive_socket, receive_port, send_socket, send_port
 
     def setup_exit_handler(self):
         signal.signal(signal.SIGINT, lambda sig, frame: self.stop())
@@ -97,14 +101,45 @@ class Client:
         self.logger.debug(f'SEND: {message}')
         self.send_socket.sendto(message.pack(), target)
 
-    def request(self, stream: int, target: tuple[str, int], max_messages: int = None):
-        target = (str(IPAddress(target[0]).ipv6()), target[1])
+    def request(self, stream: int, target: tuple[str, int], thread: bool = False, max_messages: int = None):
+        if thread:
+            return self.request_thread(stream, target, max_messages)
+        else:
+            return self.request_blocking(stream, target, max_messages)
+
+    def request_blocking(self, stream: int, target: tuple[str, int], max_messages: int = None):
         self.target_ip, _ = target
         self.send_message(RequestMessage(stream, self.receive_port), target)
         return self.receive(max_messages)
 
+    @thread_request
+    def request_thread(self, stream: int, target: tuple[str, int], max_messages: int = None):
+        return self.request(stream, target, max_messages)
 
-class ClientWithLag(Client):
+
+class ClientV6(ClientV4):
+    def __init__(self,
+                 receive_address: tuple[str, int] = ("", 0, 0, 0),
+                 send_address: tuple[str, int] = ("", 0, 0, 0),
+                 logging_level: int = logging.INFO):
+        super().__init__(receive_address, send_address, logging_level)
+
+    def setup_sockets(self, receive_address, send_address):
+        receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, True)
+        receive_socket.bind(receive_address)
+        receive_socket.settimeout(self.CLIENT_ACK_TIMEOUT)
+        receive_port = receive_socket.getsockname()[1]
+
+        send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, True)
+        send_socket.bind(send_address)
+        send_port = receive_socket.getsockname()[1]
+
+        return receive_socket, receive_port, send_socket, send_port
+
+
+class ClientV4WithLag(ClientV4):
     def __init__(self, lag: float = 0, **kwargs):
         super().__init__(**kwargs)
         self.lag = lag
@@ -119,6 +154,6 @@ class ClientWithLag(Client):
 
 
 if __name__ == '__main__':
-    client = Client(logging_level=logging.DEBUG)
+    client = ClientV4(logging_level=logging.DEBUG)
     data = client.request(stream=1, target=("127.0.0.1", 8801))
     # print(data.decode("utf-8"))
