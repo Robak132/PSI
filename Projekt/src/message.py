@@ -13,6 +13,10 @@ class MessageType(Enum):
     INF = 0b0100000
 
 
+class ErrorType(Enum):
+    STREAM_NOT_FOUND = 1
+
+
 class Message:
     def __init__(self,
                  message_type: MessageType,
@@ -101,6 +105,11 @@ class Message:
 class RequestMessage(Message):
     def __init__(self, identifier: int, port: int):
         super().__init__(MessageType.REQ, identifier, 4, struct.pack("i", port))
+
+
+class ErrorMessage(Message):
+    def __init__(self, error: ErrorType):
+        super().__init__(MessageType.ERR, error.value)
 
 
 class DataMessage(Message):

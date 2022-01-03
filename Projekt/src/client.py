@@ -1,11 +1,10 @@
 import logging
 import signal
 import socket
-from time import time, sleep
-
+from time import sleep
 from decorators import thread_request
-from message import Message, RequestMessage, ACKMessage, QuitMessage, MessageType
-from common import setup_loggers
+from message import Message, RequestMessage, ACKMessage, QuitMessage, MessageType, ErrorType
+from common import setup_loggers, receive_message, send_message, setup_sockets_ipv4, setup_sockets_ipv6
 import CONFIG as CFG
 
 
@@ -13,6 +12,7 @@ class ClientV4:
     def __init__(self,
                  receive_address: tuple[str, int] = ("", 0),
                  send_address: tuple[str, int] = ("", 0),
+                 buffer_size: int = 448,
                  logging_level: int = logging.INFO):
         self.logger = setup_loggers(logging_level)
         self.setup_exit_handler()
@@ -21,23 +21,16 @@ class ClientV4:
         self.CLIENT_ACK_TIMEOUT = CFG.CLIENT_ACK_TIMEOUT
         self.server_lag = 0
 
-        self.receive_socket, self.receive_port, self.send_socket, self.send_port = self.setup_sockets(receive_address,
-                                                                                                      send_address)
+        self.receive_socket, self.send_socket = self.setup_sockets(receive_address, send_address)
+        self.receive_port = self.receive_socket.getsockname()[1]
+
+        self.buffer_size = buffer_size
         self.target_ip = None
         self.ack_port = None
         self.is_running = True
 
     def setup_sockets(self, receive_address, send_address):
-        receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        receive_socket.bind(receive_address)
-        receive_socket.settimeout(self.CLIENT_ACK_TIMEOUT)
-        receive_port = receive_socket.getsockname()[1]
-
-        send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        send_socket.bind(send_address)
-        send_port = receive_socket.getsockname()[1]
-
-        return receive_socket, receive_port, send_socket, send_port
+        return setup_sockets_ipv4(receive_address, self.CLIENT_ACK_TIMEOUT, send_address)
 
     def setup_exit_handler(self):
         signal.signal(signal.SIGINT, lambda sig, frame: self.stop())
@@ -58,7 +51,7 @@ class ClientV4:
                         self.is_running = False
                         break
                     elif message.message_type == MessageType.ERR:
-                        self.logger.error(f"{message.data.decode('utf-8')}")
+                        self.logger.error(f"{ErrorType(message.identifier).name}")
                         self.is_running = False
                         break
                     elif message.message_type == MessageType.INF:
@@ -90,19 +83,15 @@ class ClientV4:
         return result
 
     def receive_message(self) -> Message:
-        binary_data = self.receive_socket.recv(448)
-        message = Message.unpack(binary_data)
-        lag = time() - message.timestamp
-        self.logger.debug(f'RECV: {message}, lag = {lag:.2f}')
+        message, _ = receive_message(self.receive_socket, self.buffer_size, self.logger)
         return message
 
     def send_message(self, message: Message, target: tuple[str, int]):
-        self.logger.debug(f'SEND: {message}')
-        self.send_socket.sendto(message.pack(), target)
+        send_message(self.send_socket, message, target, self.logger)
 
     def request(self, stream: int, target: tuple[str, int], thread: bool = False, max_messages: int = None):
         if thread:
-            return self.request_thread(stream, target, max_messages)
+            return self.request_nonblocking(stream, target, max_messages)
         else:
             return self.request_blocking(stream, target, max_messages)
 
@@ -112,30 +101,16 @@ class ClientV4:
         return self.receive(max_messages)
 
     @thread_request
-    def request_thread(self, stream: int, target: tuple[str, int], max_messages: int = None):
+    def request_nonblocking(self, stream: int, target: tuple[str, int], max_messages: int = None):
         return self.request_blocking(stream, target, max_messages)
 
 
 class ClientV6(ClientV4):
-    def __init__(self,
-                 receive_address: tuple[str, int] = ("", 0, 0, 0),
-                 send_address: tuple[str, int] = ("", 0, 0, 0),
-                 logging_level: int = logging.INFO):
-        super().__init__(receive_address, send_address, logging_level)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def setup_sockets(self, receive_address, send_address):
-        receive_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        receive_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, True)
-        receive_socket.bind(receive_address)
-        receive_socket.settimeout(self.CLIENT_ACK_TIMEOUT)
-        receive_port = receive_socket.getsockname()[1]
-
-        send_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        send_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, True)
-        send_socket.bind(send_address)
-        send_port = receive_socket.getsockname()[1]
-
-        return receive_socket, receive_port, send_socket, send_port
+        return setup_sockets_ipv6(receive_address, self.CLIENT_ACK_TIMEOUT, send_address)
 
 
 class ClientV4WithLag(ClientV4):
