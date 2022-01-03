@@ -111,8 +111,7 @@ class ClientWithLag(Client):
 
     def receive_message(self) -> Message:
         sleep(self.lag)
-        message = super().receive_message()
-        return message
+        return super().receive_message()
 
     def send_message(self, message: Message, target: tuple[str, int]):
         sleep(self.lag)
@@ -120,6 +119,6 @@ class ClientWithLag(Client):
 
 
 if __name__ == '__main__':
-    client = ClientWithLag(logging_level=logging.DEBUG, lag=0.1)
+    client = Client(logging_level=logging.DEBUG)
     data = client.request(stream=1, target=("127.0.0.1", 8801))
     # print(data.decode("utf-8"))

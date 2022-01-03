@@ -11,7 +11,7 @@ class TestServerClientConnection:
         server.register_stream(1, File("tests/resources/test_file.txt"))
         server.start()
 
-        client = Client()
+        client = Client(logging_level=logging.CRITICAL)
         data = client.request(1, ("127.0.0.1", 8888))
         assert "1234567890\ntest\nzażółć gęsią jaźń" == data.decode("utf-8")
 

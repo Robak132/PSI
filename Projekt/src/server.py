@@ -4,7 +4,7 @@ import socket
 import struct
 import threading
 import logging
-from time import time
+from time import time, sleep
 from typing import Tuple
 from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType
 from streams import File, Stream, Ping
@@ -215,8 +215,41 @@ class Server:
         self.threads.append(communication_thread)
 
 
+class CommunicationThreadWithLag(CommunicationThread):
+    def __init__(self, lag: float = 0, **kwargs):
+        self.lag = lag
+        super().__init__(**kwargs)
+
+    def send_message(self, message: Message, address: Tuple[str, int]):
+        sleep(self.lag)
+        super().send_message(message, address)
+
+    def receive_message(self):
+        sleep(self.lag)
+        return super().receive_message()
+
+
+class ServerWithLag(Server):
+    def __init__(self, lag: float = 0, **kwargs):
+        super().__init__(**kwargs)
+        self.lag = lag
+
+    def create_new_thread(self, stream_idx: int, address: tuple):
+        stream = self.streams[stream_idx]
+        stream.prepare()
+
+        communication_thread = CommunicationThreadWithLag(stream=stream,
+                                                          address=address,
+                                                          buffer_size=self.buffer_size,
+                                                          logger=self.logger,
+                                                          server_ip_address=self.receive_address[0],
+                                                          interface=self.interface,
+                                                          lag=self.lag)
+        self.threads.append(communication_thread)
+
+
 if __name__ == '__main__':
-    server = Server(('127.0.0.1', 8801), logging_level=logging.DEBUG)
+    server = ServerWithLag(address=('127.0.0.1', 8801), logging_level=logging.DEBUG, lag=0.1)
     server.register_stream(1, File("resources/file.txt"))
     server.register_stream(2, Ping(1))
     server.start(thread=False)
