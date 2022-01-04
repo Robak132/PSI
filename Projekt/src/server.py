@@ -12,7 +12,7 @@ import CONFIG as CFG
 
 
 class CommunicationThreadV4(StoppableThread):
-    def __init__(self, stream: Stream, address, buffer_size, logger, server_ip_address="::"):
+    def __init__(self, stream: Stream, address, logger, server_ip_address="::"):
         self.logger = logger
 
         self.CLIENT_NOT_RESPONDING_TIMEOUT = CFG.CLIENT_NOT_RESPONDING_TIMEOUT
@@ -25,7 +25,6 @@ class CommunicationThreadV4(StoppableThread):
         self.stream = stream
         self.message_idx = 0
         self.address = address
-        self.buffer_size = buffer_size
         self.client_connected = True
 
         super().__init__()
@@ -76,7 +75,7 @@ class CommunicationThreadV4(StoppableThread):
         try:
             while True:
                 # Waiting for ACK
-                message, _ = receive_message(self.receive_socket, self.buffer_size, self.logger)
+                message, _ = receive_message(self.receive_socket, self.logger)
                 if message.message_type == MessageType.ACK:
                     ACK_id = message.identifier
                     if self.message_idx == ACK_id:
@@ -129,7 +128,6 @@ class Server:
                  ipv4_send_address: tuple[str, int] = ("", 0),
                  ipv6_receive_address: tuple[str, int, int, int] = ("", 0, 0, 0),
                  ipv6_send_address: tuple[str, int, int, int] = ("", 0, 0, 0),
-                 buffer_size: int = 448,
                  logging_level: int = logging.INFO):
         self.logger = setup_loggers(logging_level)
         self.setup_exit_handler()
@@ -148,7 +146,6 @@ class Server:
 
         self.is_running = True
         self.main_thread = None
-        self.buffer_size = buffer_size
         self.streams = {}
         self.threads = []
 
@@ -181,7 +178,7 @@ class Server:
     def receive(self):
         ready_sockets, _, _ = select(self.sockets, [], [], 1)
         for ready_socket in ready_sockets:
-            message, address = receive_message(ready_socket, self.buffer_size, self.logger)
+            message, address = receive_message(ready_socket, self.logger)
             if message.message_type == MessageType.REQ:
                 self.logger.info(f"Client request from {address}, stream idx: {message.identifier}")
                 ip_address, *_ = address
@@ -201,20 +198,22 @@ class Server:
         if version == 4:
             communication_thread = CommunicationThreadV4(stream=stream,
                                                          address=address,
-                                                         buffer_size=self.buffer_size,
                                                          logger=self.logger,
                                                          server_ip_address=self.ipv4_receive_address[0])
         else:
             communication_thread = CommunicationThreadV6(stream=stream,
                                                          address=address,
-                                                         buffer_size=self.buffer_size,
                                                          logger=self.logger,
                                                          server_ip_address=self.ipv6_receive_address[0])
         self.threads.append(communication_thread)
 
 
 if __name__ == '__main__':
-    server = Server(ipv4_receive_address=("127.0.0.1", 8801), logging_level=logging.DEBUG)
+    server = Server(
+        ipv4_receive_address=("127.0.0.1", 8801),
+        ipv6_receive_address=("2a02:a317:2239:2300:45ee:c79d:c067:28ca", 8801, 0, 0),
+        logging_level=logging.INFO)
     server.register_stream(1, File("resources/file.txt"))
     server.register_stream(2, Ping(1))
+    server.register_stream(3, File("resources/gnome.png"))
     server.start(thread=False)

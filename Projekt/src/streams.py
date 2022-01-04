@@ -26,24 +26,23 @@ class Stream:
 
 
 class File(Stream):
-    def __init__(self, filename, encoding="utf-8", packet_size=400):
+    def __init__(self, filename, packet_size=400):
         super().__init__(packet_size)
-        with open(filename, 'r', encoding=encoding) as file:
-            self._data = file.read()
-            self._binary_data = bytes(self._data, encoding=encoding)
+        with open(filename, 'rb') as file:
+            self._binary_data = file.read()
 
     def prepare(self):
         self.fill_queue(self._binary_data)
 
-    def get_data(self):
-        return self._data
+    def get_data(self, encoding):
+        return self._binary_data.decode(encoding)
 
     def get_binary_data(self):
         return self._binary_data
 
 
 class Ping(Stream):
-    def __init__(self, delay: int):
+    def __init__(self, delay: float):
         """
         Simple infinite stream, which sends small message 'PING' every x seconds.
 
