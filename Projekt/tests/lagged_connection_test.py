@@ -21,5 +21,5 @@ class TestLaggedConnection:
         assert "1234567890\ntest\nzażółć gęsią jaźń" == data.decode("utf-8")
 
         # Timeout was adjusted for client lag
-        assert server.threads[0].SERVER_ACK_TIMEOUT == 5.12
+        assert server.threads[0].SERVER_ACK_TIMEOUT == 4.096
         server.stop()
