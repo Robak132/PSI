@@ -5,12 +5,12 @@ from enum import Enum
 
 
 class MessageType(Enum):
-    REQ = 0b0000001
-    ERR = 0b0000010
-    MSG = 0b0000100
-    ACK = 0b0001000
-    FIN = 0b0010000
-    INF = 0b0100000
+    REQ = 0b00000001
+    ERR = 0b00000010
+    MSG = 0b00000100
+    ACK = 0b00001000
+    FIN = 0b00010000
+    INF = 0b00100000
 
 
 class ErrorType(Enum):
