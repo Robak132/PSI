@@ -66,6 +66,7 @@ def receive_message(receive_socket: socket, buffer_size: int, logger) -> tuple[M
     logger.debug(f'RECV: {message}, lag = {time() - message.timestamp:.2f}')
     return message, address
 
+
 def setup_loggers(logging_level: int):
     logger = logging.getLogger(__name__)
     logger.setLevel(logging_level)

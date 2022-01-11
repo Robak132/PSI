@@ -104,7 +104,7 @@ class CommunicationThreadV4(StoppableThread):
 
 
 class CommunicationThreadV6(CommunicationThreadV4):
-    def __init__(self,  **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def setup_sockets(self, ip_address):

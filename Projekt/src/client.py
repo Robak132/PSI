@@ -59,7 +59,9 @@ class ClientV4:
                         if self.ack_port != ack_port:
                             self.ack_port = ack_port
                             self.logger.info(f'Sending ACKs to: {ack_port}')
-                    elif message.identifier == pkg_number + 1 and message.message_type == MessageType.MSG and message.check_hash():
+                    elif message.identifier == pkg_number + 1 \
+                            and message.message_type == MessageType.MSG \
+                            and message.check_hash():
                         pkg_number += 1
                         self.server_lag = 0
                         if message.size != 0:
