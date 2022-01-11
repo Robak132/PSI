@@ -3,7 +3,6 @@ import socket
 import logging
 from queue import Empty
 from select import select
-from typing import Tuple
 from message import Message, DataMessage, QuitMessage, InfoMessage, MessageType, ErrorMessage, ErrorType
 from streams import File, Stream, Ping
 from common import setup_loggers, StoppableThread, send_message, receive_message, setup_sockets_ipv4, setup_sockets_ipv6
@@ -172,7 +171,7 @@ class Server:
             while self.is_running:
                 self.receive()
 
-    def send_error(self, message: Message, address: Tuple[str, int]):
+    def send_error(self, message: Message, address: tuple[str, int]):
         self.logger.debug(f"SEND: {message}")
         ip_version = IPAddress(address[0]).version
         send_socket = self.ipv4_send_socket if ip_version == 4 else self.ipv6_send_socket
