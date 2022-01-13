@@ -1,3 +1,7 @@
+# Nazwa projektu: System niezawodnego strumieniowania danych po UDP
+# Autorzy:        Michał Matak, Paweł Müller, Jakub Robaczewski, Grzegorz Rusinek
+# Data:           14.01.2022
+
 import logging
 import threading
 from _socket import IPPROTO_IPV6, IPV6_V6ONLY
