@@ -64,8 +64,8 @@ def send_message(send_socket: socket, message: Message, address: tuple[str, int]
     send_socket.sendto(message.pack(), address)
 
 
-def receive_message(receive_socket: socket, buffer_size: int, logger) -> tuple[Message, tuple[str, int]]:
-    binary_data, address = receive_socket.recvfrom(buffer_size)
+def receive_message(receive_socket: socket, logger) -> tuple[Message, tuple[str, int]]:
+    binary_data, address = receive_socket.recvfrom(Message.MAX_MESSAGE_SIZE)
     message = Message.unpack(binary_data)
     logger.debug(f'RECV: {message}, lag = {time() - message.timestamp:.2f}')
     return message, address

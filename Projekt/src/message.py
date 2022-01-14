@@ -22,6 +22,10 @@ class ErrorType(Enum):
 
 
 class Message:
+    MAX_HEADER_SIZE = 48
+    MAX_DATA_SIZE = 400
+    MAX_MESSAGE_SIZE = MAX_HEADER_SIZE + MAX_DATA_SIZE
+
     def __init__(self,
                  message_type: MessageType,
                  identifier: int,
@@ -58,7 +62,7 @@ class Message:
             self.timestamp = int(time.time())
         else:
             self.timestamp = timestamp
-        self.data = data
+        self.data = data[:Message.MAX_MESSAGE_SIZE]
         if data_hash is None:
             self.hash_algorithm.update(data)
             self.data_hash = self.hash_algorithm.digest()

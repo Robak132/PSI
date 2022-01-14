@@ -19,7 +19,7 @@ class TestBasicConnectionV4:
 
         client = ClientV4(logging_level=logging.CRITICAL)
         data = client.request(1, ("127.0.0.1", receive_port))
-        assert "1234567890\ntest\nzażółć gęsią jaźń" == data.decode("utf-8")
+        assert "1234567890\r\ntest\r\nzażółć gęsią jaźń" == data.decode("utf-8")
 
         server.stop()
 
@@ -35,7 +35,7 @@ class TestBasicConnectionV6:
 
         client = ClientV6(logging_level=logging.CRITICAL)
         data = client.request(1, ("::1", receive_port))
-        assert "1234567890\ntest\nzażółć gęsią jaźń" == data.decode("utf-8")
+        assert "1234567890\r\ntest\r\nzażółć gęsią jaźń" == data.decode("utf-8")
 
         server.stop()
 
@@ -52,10 +52,10 @@ class TestTwinConnection:
 
         clientV4 = ClientV4(logging_level=logging.CRITICAL)
         data = clientV4.request(1, ("127.0.0.1", receive_portV4))
-        assert "1234567890\ntest\nzażółć gęsią jaźń" == data.decode("utf-8")
+        assert "1234567890\r\ntest\r\nzażółć gęsią jaźń" == data.decode("utf-8")
 
         clientV6 = ClientV6(logging_level=logging.CRITICAL)
         data = clientV6.request(1, ("::1", receive_portV6))
-        assert "1234567890\ntest\nzażółć gęsią jaźń" == data.decode("utf-8")
+        assert "1234567890\r\ntest\r\nzażółć gęsią jaźń" == data.decode("utf-8")
 
         server.stop()
